@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BayesInteractomics — Interactome Report</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- DataTables Bootstrap 5 integration -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css">
+
+  <style>
+    body { background: #f0f2f5; font-family: 'Segoe UI', Arial, sans-serif; }
+    .navbar { background: linear-gradient(135deg, #0d47a1, #1565c0); }
+    .metric-card { background: #fff; border-radius: 10px; padding: 18px 22px;
+                   box-shadow: 0 1px 4px rgba(0,0,0,.12); text-align: center; }
+    .metric-value { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+    .metric-label { font-size: .78rem; color: #6c757d; margin-top: 4px; }
+    .plot-card    { background: #fff; border-radius: 10px; padding: 18px 20px;
+                    box-shadow: 0 1px 4px rgba(0,0,0,.10); margin-bottom: 18px; }
+    .section-title { font-size: 1rem; font-weight: 600; color: #0d47a1;
+                     border-left: 4px solid #1565c0; padding-left: 10px;
+                     margin: 0 0 12px 0; }
+    .static-plot  { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 4px; }
+    .nav-tabs .nav-link       { color: #495057; font-size: .92rem; padding: .5rem 1.1rem; }
+    .nav-tabs .nav-link.active{ color: #0d47a1; font-weight: 600; border-bottom: 3px solid #0d47a1; }
+    #selected-banner { display: none; background: #e3f2fd; border: 1px solid #1565c0;
+                       border-radius: 8px; padding: 8px 16px; margin-bottom: 12px; align-items: center; }
+    .methods-block { background: #f8f9fa; border-left: 4px solid #1565c0;
+                     padding: 14px 20px; font-family: Georgia, serif;
+                     line-height: 1.85; white-space: pre-wrap; }
+    #repro-block  { background: #f8f9fa; border-radius: 6px; padding: 14px;
+                    font-family: monospace; font-size: .82rem; white-space: pre-wrap; }
+    .tab-content  { background: #f0f2f5; }
+    .dataTables_wrapper { font-size: .88rem; }
+    tr.dt-selected { background: #e3f2fd !important; }
+    .badge-strong   { background: #1565c0; color: #fff; }
+    .badge-moderate { background: #f9a825; color: #333; }
+    .badge-weak     { background: #78909c; color: #fff; }
+    .badge-ns       { background: #e0e0e0; color: #666; }
+  </style>
+</head>
+<body>
+
+<!-- ===== NAVBAR ===== -->
+<nav class="navbar navbar-dark py-2 px-3">
+  <span class="navbar-brand fw-bold fs-5">🧬 BayesInteractomics</span>
+  <span class="navbar-text text-white" id="nav-subtitle" style="font-size:.9rem"></span>
+  <span class="navbar-text text-white-50" id="nav-date" style="font-size:.8rem"></span>
+</nav>
+
+<div class="container-fluid py-3 px-3">
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="row g-3 mb-3" id="dashboard-row"></div>
+
+  <!-- ===== SELECTED PROTEIN BANNER ===== -->
+  <div id="selected-banner" class="d-flex gap-3 mb-2">
+    <strong>Selected:</strong>
+    <span id="selected-name" class="text-primary fw-semibold"></span>
+    <button class="btn btn-sm btn-outline-secondary py-0" onclick="clearSelection()">✕ Clear</button>
+  </div>
+
+  <!-- ===== TABS ===== -->
+  <ul class="nav nav-tabs bg-white rounded-top px-2 pt-1" id="mainTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-results">📊 Results</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-evidence">🔬 Evidence</button></li>
+    <li class="nav-item" id="tab-diag-li"  style="display:none"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-diagnostics">🔧 Diagnostics</button></li>
+    <li class="nav-item" id="tab-sens-li"  style="display:none"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sensitivity">📐 Sensitivity</button></li>
+    <li class="nav-item" id="tab-diff-li"  style="display:none"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-differential">⚡ Differential</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-methods">📝 Methods</button></li>
+  </ul>
+
+  <div class="tab-content rounded-bottom" id="tabContent">
+
+    <!-- ============================= TAB: RESULTS ============================= -->
+    <div class="tab-pane fade show active p-3" id="tab-results">
+
+      <!-- Volcano plot -->
+      <div class="plot-card">
+        <p class="section-title">Volcano Plot
+          <small class="text-muted fw-normal ms-2" style="font-size:.78rem">
+            Click a point to highlight it across all plots and the table.
+          </small>
+        </p>
+        <div id="volcano-plot" style="height:490px"></div>
+      </div>
+
+      <!-- Rank-rank plot -->
+      <div class="plot-card">
+        <p class="section-title">Rank-Rank Plot
+          <small class="text-muted fw-normal ms-2" style="font-size:.78rem">
+            X: log₁₀(BF) · Y: log₂FC · Colour: log₁₀(BF correlation)
+          </small>
+        </p>
+        <div id="rankrank-plot" style="height:490px"></div>
+      </div>
+
+      <!-- Results table -->
+      <div class="plot-card">
+        <p class="section-title">Results Table</p>
+
+        <!-- Search + export toolbar -->
+        <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+          <input id="tbl-search" type="text" class="form-control form-control-sm" style="max-width:260px"
+                 placeholder="🔍 Search proteins…" oninput="dtSearch(this.value)">
+          <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()">⬇ Export CSV</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="resetAll()">Reset</button>
+          <span class="text-muted small ms-auto" id="tbl-count"></span>
+        </div>
+
+        <!-- Filter bar -->
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 px-2 py-2 rounded"
+             style="background:#f8f9fa;border:1px solid #dee2e6;font-size:.83rem">
+          <span class="text-muted fw-semibold me-1">Filters:</span>
+
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text text-muted py-0">BF ≥</span>
+            <input id="filter-bf-min" type="number" class="form-control py-0"
+                   style="width:72px" min="0" placeholder="–" oninput="applyFilters()"
+                   title="Minimum combined Bayes factor">
+          </div>
+
+          <div class="input-group input-group-sm" style="width:auto">
+            <span class="input-group-text text-muted py-0">q ≤</span>
+            <input id="filter-q-max" type="number" class="form-control py-0"
+                   style="width:72px" min="0" max="1" step="0.001" placeholder="–"
+                   oninput="applyFilters()" title="Maximum FDR-corrected q-value">
+            <button class="btn btn-outline-secondary btn-sm py-0 px-2"
+                    onclick="setQFilter(0.05)" title="Show q ≤ 0.05">0.05</button>
+            <button class="btn btn-outline-secondary btn-sm py-0 px-2"
+                    onclick="setQFilter(0.01)" title="Show q ≤ 0.01">0.01</button>
+          </div>
+
+          <div class="input-group input-group-sm" style="width:auto" id="filter-diag-group">
+            <span class="input-group-text text-muted py-0">Diag.</span>
+            <select id="filter-diag" class="form-select py-0"
+                    style="width:auto;min-width:105px" onchange="applyFilters()">
+              <option value="">All</option>
+              <option value="ok">✔ OK</option>
+              <option value="warning">⚠ Warning</option>
+              <option value="fail">✘ Fail</option>
+            </select>
+          </div>
+
+          <div class="input-group input-group-sm" style="width:auto" id="filter-sens-group">
+            <span class="input-group-text text-muted py-0">Sens. ≤</span>
+            <input id="filter-sens-max" type="number" class="form-control py-0"
+                   style="width:72px" min="0" step="0.01" placeholder="–"
+                   oninput="applyFilters()" title="Maximum sensitivity range">
+          </div>
+
+          <button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1"
+                  onclick="resetFilters()" title="Clear all filters">✕ Clear filters</button>
+          <span class="text-muted ms-2" id="filter-active-badge" style="display:none">
+            <span class="badge text-bg-warning" id="filter-count-badge"></span>
+          </span>
+        </div>
+        <div class="table-responsive">
+          <table id="results-table" class="table table-hover table-sm" style="width:100%">
+            <thead class="table-light">
+              <tr>
+                <th>Protein</th>
+                <th>Bayes Factor</th>
+                <th>Posterior Prob</th>
+                <th>q-value</th>
+                <th>log₂FC</th>
+                <th>BF Enrich.</th>
+                <th>BF Correl.</th>
+                <th>BF Detect.</th>
+                <th>Evidence</th>
+                <th>Diag</th>
+                <th>Sens. Range</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /tab-results -->
+
+    <!-- ============================= TAB: EVIDENCE ============================= -->
+    <div class="tab-pane fade p-3" id="tab-evidence">
+      <div id="evidence-container"></div>
+    </div>
+
+    <!-- ============================= TAB: DIAGNOSTICS ============================= -->
+    <div class="tab-pane fade p-3" id="tab-diagnostics">
+      <div id="diagnostics-container"></div>
+    </div>
+
+    <!-- ============================= TAB: SENSITIVITY ============================= -->
+    <div class="tab-pane fade p-3" id="tab-sensitivity">
+      <div id="sensitivity-container"></div>
+    </div>
+
+    <!-- ============================= TAB: DIFFERENTIAL ============================= -->
+    <div class="tab-pane fade p-3" id="tab-differential">
+      <div id="differential-container"></div>
+    </div>
+
+    <!-- ============================= TAB: METHODS ============================= -->
+    <div class="tab-pane fade p-3" id="tab-methods">
+
+      <div class="plot-card">
+        <p class="section-title">Methods Section</p>
+        <p class="text-muted small mb-2">Copy and paste into your manuscript methods section.</p>
+        <div class="methods-block" id="methods-text"></div>
+        <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyMethods()">📋 Copy to clipboard</button>
+      </div>
+
+      <div class="plot-card">
+        <p class="section-title">Analysis Parameters</p>
+        <table class="table table-sm table-striped" style="font-size:.85rem;max-width:600px">
+          <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+          <tbody id="params-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="plot-card">
+        <p class="section-title">Reproducibility</p>
+        <pre id="repro-block"></pre>
+      </div>
+
+    </div><!-- /tab-methods -->
+
+  </div><!-- /tab-content -->
+</div><!-- /container -->
+
+<!-- ===== SCRIPTS (CDN) ===== -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+<!-- ===== EMBEDDED DATA ===== -->
+<script>const REPORT_DATA = {{REPORT_DATA_JSON}};</script>
+
+<!-- ===== REPORT LOGIC ===== -->
+<script>
+"use strict";
+
+// ── Colours ─────────────────────────────────────────────────────────────────
+const C = {
+  strong:   '#0d47a1',
+  moderate: '#f9a825',
+  ns:       '#9e9e9e',
+};
+
+// ── Global state ─────────────────────────────────────────────────────────────
+const selectedProteins = new Set();  // multi-select set
+let dt = null;          // DataTable instance
+const D = REPORT_DATA;  // convenience alias
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initDashboard();
+  initVolcano();
+  initRankRank();
+  initTable();
+  initStaticPlots();
+  initMethodsTab();
+});
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function initDashboard() {
+  const m = D.meta;
+  document.getElementById('nav-subtitle').textContent =
+      (m.bait || 'Analysis') + ' Interactome · v' + (m.package_version || '?');
+  document.getElementById('nav-date').textContent = m.generated_at || '';
+
+  const cards = [
+    { val: (m.n_proteins || 0).toLocaleString(), lbl: 'Proteins analysed',        col: '#0d47a1' },
+    { val: (m.n_significant || 0).toLocaleString(), lbl: 'Significant (q ≤ 0.05)', col: '#1976d2' },
+    { val: (m.n_strong || 0).toLocaleString(),      lbl: 'Strong evidence (q ≤ 0.01)', col: '#2e7d32' },
+    { val: m.n_proteins > 0
+        ? (100 * m.n_significant / m.n_proteins).toFixed(1) + '%'
+        : '—',
+      lbl: 'Interaction rate', col: '#e65100' },
+  ];
+  const row = document.getElementById('dashboard-row');
+  cards.forEach(c => {
+    const col = document.createElement('div');
+    col.className = 'col-6 col-md-3';
+    col.innerHTML = `<div class="metric-card">
+      <div class="metric-value" style="color:${c.col}">${c.val}</div>
+      <div class="metric-label">${c.lbl}</div></div>`;
+    row.appendChild(col);
+  });
+}
+
+// ── Shared hover template ─────────────────────────────────────────────────────
+const HT =
+  '<b>%{customdata[0]}</b><br>' +
+  'Posterior Prob: <b>%{customdata[1]}</b><br>' +
+  'Bayes Factor: <b>%{customdata[2]}</b><br>' +
+  'q-value: <b>%{customdata[3]}</b><br>' +
+  'log₂FC: <b>%{customdata[4]}</b><br>' +
+  'Fold enriched: <b>%{customdata[5]}</b><br>' +
+  '<br>' +
+  'BF Enrichment: %{customdata[6]}<br>' +
+  'BF Correlation: %{customdata[7]}<br>' +
+  'BF Detection: %{customdata[8]}<br>' +
+  '<i>%{customdata[9]}</i>' +
+  '<extra></extra>';
+
+function makeCustomdata(r) {
+  const fmt = (v, d) => (v == null || isNaN(v)) ? 'N/A' : v.toFixed(d);
+  const fmtBF = v => (v == null || isNaN(v)) ? 'N/A' :
+                     (v >= 1000 ? v.toExponential(2) : v.toFixed(1));
+  const fmtQ  = v => (v == null || isNaN(v)) ? 'N/A' :
+                     (v < 0.001 ? v.toExponential(2) : v.toFixed(4));
+  const fmtFC = v => (v == null || isNaN(v)) ? 'N/A' : v.toFixed(1) + '×';
+  return [
+    r.protein,
+    fmt(r.posterior_prob, 3),
+    fmtBF(r.bf),
+    fmtQ(r.q),
+    fmt(r.mean_log2fc, 2),
+    fmtFC(r.fold_change),
+    fmtBF(r.bf_enrichment),
+    fmtBF(r.bf_correlation),
+    fmtBF(r.bf_detected),
+    r.evidence_label || '',
+  ];
+}
+
+// ── Volcano plot ──────────────────────────────────────────────────────────────
+function initVolcano() {
+  const results = D.results || [];
+  // Only plot proteins with valid q AND valid posterior — skip proteins with missing statistical evidence
+  const hasData  = r => r.q != null && !isNaN(r.q) && r.posterior_prob != null && !isNaN(r.posterior_prob);
+  const strong   = results.filter(r => hasData(r) && r.q <= 0.01);
+  const moderate = results.filter(r => hasData(r) && r.q > 0.01 && r.q <= 0.05);
+  const ns       = results.filter(r => hasData(r) && r.q > 0.05);
+
+  function trace(data, name, color) {
+    return {
+      x: data.map(r => r.mean_log2fc),
+      y: data.map(r => r.q > 0 ? -Math.log10(r.q) : -Math.log10(1e-300)),
+      mode: 'markers', name,
+      marker: { color, size: 6, opacity: 0.72 },
+      customdata: data.map(makeCustomdata),
+      hovertemplate: HT,
+      text: data.map(r => r.protein),
+      type: 'scatter',
+    };
+  }
+
+  const traces = [
+    trace(ns,       'Not significant (q > 0.05)', C.ns),
+    trace(moderate, 'Moderate (q ≤ 0.05)',         C.moderate),
+    trace(strong,   'Significant (q ≤ 0.01)',      C.strong),
+  ];
+
+  const layout = {
+    xaxis: { title: 'log₂ Fold Change', zeroline: true, zerolinecolor: '#ddd' },
+    yaxis: { title: '−log₁₀(q)' },
+    legend: { orientation: 'h', y: -0.18 },
+    margin: { t: 10, b: 60, l: 55, r: 20 },
+    shapes: [
+      hline(-Math.log10(0.05), '#f9a825'),
+      hline(-Math.log10(0.01), '#0d47a1'),
+      vline(-1), vline(1),
+    ],
+    hovermode: 'closest', plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+  };
+
+  Plotly.newPlot('volcano-plot', traces, layout, { responsive: true });
+  const vEl = document.getElementById('volcano-plot');
+  vEl.on('plotly_click',    e => toggleSelected(e.points[0].customdata[0]));
+  vEl.on('plotly_selected', e => {
+    if (!e || !e.points) return;
+    e.points.forEach(pt => selectedProteins.add(pt.customdata[0]));
+    _updateBanner(); _updateTableHighlight(); applyHighlighting();
+    dt && dt.draw();
+  });
+}
+
+// ── Rank-rank plot ────────────────────────────────────────────────────────────
+function initRankRank() {
+  const results = D.results || [];
+  const bfcVals = results.map(r =>
+    (r.bf_correlation != null && r.bf_correlation > 0)
+      ? Math.log10(r.bf_correlation) : 0);
+
+  const trace = {
+    x: results.map(r => (r.bf != null && r.bf > 0) ? Math.log10(r.bf) : 0),
+    y: results.map(r => r.mean_log2fc ?? 0),
+    mode: 'markers',
+    marker: {
+      color: bfcVals, colorscale: 'Viridis', size: 6, opacity: 0.7,
+      colorbar: { title: { text: 'log₁₀(BF_corr)', side: 'right' }, thickness: 14 },
+    },
+    customdata: results.map(makeCustomdata),
+    hovertemplate: HT,
+    text: results.map(r => r.protein),
+    type: 'scatter',
+  };
+
+  const layout = {
+    xaxis: { title: 'log₁₀(Combined Bayes Factor)' },
+    yaxis: { title: 'log₂ Fold Change', zeroline: true, zerolinecolor: '#ddd' },
+    margin: { t: 10, b: 55, l: 55, r: 80 },
+    shapes: [ vline(2), hline(1), hline(-1) ],
+    hovermode: 'closest', plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+  };
+
+  Plotly.newPlot('rankrank-plot', [trace], layout, { responsive: true });
+  const rrEl = document.getElementById('rankrank-plot');
+  rrEl.on('plotly_click',    e => toggleSelected(e.points[0].customdata[0]));
+  rrEl.on('plotly_selected', e => {
+    if (!e || !e.points) return;
+    e.points.forEach(pt => selectedProteins.add(pt.customdata[0]));
+    _updateBanner(); _updateTableHighlight(); applyHighlighting();
+    dt && dt.draw();
+  });
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function initTable() {
+  // Pre-compute sensitivity tercile thresholds for background coloring
+  const sensVals = (D.results || [])
+    .map(r => r.sensitivity_range)
+    .filter(v => v != null && !isNaN(v))
+    .sort((a, b) => a - b);
+  const sensQ33 = sensVals.length > 2 ? sensVals[Math.floor(sensVals.length / 3)]     : null;
+  const sensQ67 = sensVals.length > 2 ? sensVals[Math.floor(sensVals.length * 2 / 3)] : null;
+  const sensBg = v => {
+    if (v == null || isNaN(v) || sensQ33 === null) return '';
+    if (v <= sensQ33) return 'background:#e8f5e9';   // stable → light green
+    if (v >= sensQ67) return 'background:#ffebee';   // sensitive → light red
+    return 'background:#fff9c4';                     // medium → light yellow
+  };
+
+  const tbody = document.getElementById('tbl-body');
+  (D.results || []).forEach(r => {
+    const ev   = r.evidence_label || '';
+    const cls  = ev.startsWith('Strong')   ? 'badge-strong'
+               : ev.startsWith('Moderate') ? 'badge-moderate'
+               : ev.startsWith('Weak')     ? 'badge-weak'
+               : 'badge-ns';
+    const fmtBF = v => (v == null || isNaN(v)) ? '—' :
+                       (v >= 1000 ? v.toExponential(2) : v.toFixed(1));
+    const fmtQ  = v => (v == null || isNaN(v)) ? '—' :
+                       (v < 0.001 ? v.toExponential(2) : v.toFixed(4));
+    const fmt   = (v, d) => (v == null || isNaN(v)) ? '—' : v.toFixed(d);
+
+    // Diagnostic flag icon
+    const flagIcon = r.diagnostic_flag === 'ok'
+      ? '<span title="Model diagnostics OK" style="color:#2e7d32;font-size:1rem">✔</span>'
+      : r.diagnostic_flag === 'warning'
+      ? '<span title="Diagnostic warning" style="color:#f9a825;font-size:1rem">⚠</span>'
+      : r.diagnostic_flag === 'fail'
+      ? '<span title="Diagnostic failure" style="color:#c62828;font-size:1rem">✘</span>'
+      : '';
+
+    // Sensitivity range (quantile-colored background)
+    const sr    = r.sensitivity_range;
+    const srOrd = (sr == null || isNaN(sr)) ? -1 : sr;
+    const srTxt = (sr == null || isNaN(sr)) ? '—' : sr.toFixed(3);
+
+    // Numeric sort key for q-value (missing → sort last)
+    const qOrd  = (r.q == null || isNaN(r.q)) ? 2 : r.q;
+
+    const tr = document.createElement('tr');
+    tr.dataset.protein = r.protein;
+    tr.innerHTML = `
+      <td><strong>${esc(r.protein)}</strong></td>
+      <td>${fmtBF(r.bf)}</td>
+      <td>${fmt(r.posterior_prob, 3)}</td>
+      <td data-order="${qOrd}">${fmtQ(r.q)}</td>
+      <td>${fmt(r.mean_log2fc, 2)}</td>
+      <td>${fmtBF(r.bf_enrichment)}</td>
+      <td>${fmtBF(r.bf_correlation)}</td>
+      <td>${fmtBF(r.bf_detected)}</td>
+      <td><span class="badge ${cls}" style="font-size:.75rem">${esc(ev)}</span></td>
+      <td style="text-align:center">${flagIcon}</td>
+      <td data-order="${srOrd}" style="${sensBg(sr)}">${srTxt}</td>`;
+    tr.addEventListener('click', () => toggleSelected(r.protein));
+    tbody.appendChild(tr);
+  });
+
+  // Hide diagnostic/sensitivity filter inputs when data columns are absent
+  const hasDiagData = (D.results || []).some(r => r.diagnostic_flag != null);
+  const hasSensData = (D.results || []).some(r => r.sensitivity_range != null && !isNaN(r.sensitivity_range));
+  if (!hasDiagData)  document.getElementById('filter-diag-group').style.display  = 'none';
+  if (!hasSensData)  document.getElementById('filter-sens-group').style.display  = 'none';
+
+  dt = new DataTable('#results-table', {
+    paging: true, pageLength: 25,
+    lengthMenu: [10, 25, 50, 100, 250],
+    order: [[3, 'asc']],   // sort by q ascending by default
+    dom: 'lrtip',          // length + table + info + pagination (no built-in search)
+    columnDefs: [{ targets: [8, 9], orderable: false }],
+  });
+
+  dt.on('draw', () => {
+    document.getElementById('tbl-count').textContent =
+      dt.rows({ search: 'applied' }).count() + ' / ' + (D.results || []).length + ' proteins';
+    updatePlotsForFilter();
+  });
+  dt.draw();
+}
+
+function dtSearch(val) { dt && dt.search(val).draw(); }
+function resetSearch() {
+  document.getElementById('tbl-search').value = '';
+  dtSearch('');
+}
+
+// ── Column filters ─────────────────────────────────────────────────────────────
+
+// Lazy lookup map: protein name → raw result object
+let _resultMap = null;
+function _getResultMap() {
+  if (!_resultMap) {
+    _resultMap = {};
+    (D.results || []).forEach(r => { _resultMap[r.protein] = r; });
+  }
+  return _resultMap;
+}
+
+// Register custom DataTables search plugin (evaluated on every draw)
+$.fn.dataTable.ext.search.push(function(settings, data) {
+  if (settings.nTable.id !== 'results-table') return true;
+  // data[0] contains the rendered HTML of the first column — strip tags to get protein name
+  const protein = data[0].replace(/<[^>]*>/g, '').trim();
+  const r = _getResultMap()[protein];
+  if (!r) return true;
+
+  // Selection filter: when proteins are selected, show only those
+  if (selectedProteins.size > 0 && !selectedProteins.has(protein)) return false;
+
+  const bfMin   = parseFloat(document.getElementById('filter-bf-min').value);
+  const qMax    = parseFloat(document.getElementById('filter-q-max').value);
+  const diag    = document.getElementById('filter-diag').value;
+  const sensMax = parseFloat(document.getElementById('filter-sens-max').value);
+
+  if (!isNaN(bfMin)   && (r.bf               == null || r.bf               < bfMin))   return false;
+  if (!isNaN(qMax)    && (r.q                == null || r.q                > qMax))    return false;
+  if (diag            && r.diagnostic_flag   !== diag)                                  return false;
+  if (!isNaN(sensMax) && (r.sensitivity_range == null || r.sensitivity_range > sensMax)) return false;
+
+  return true;
+});
+
+function applyFilters() {
+  _updateFilterBadge();
+  dt && dt.draw();
+}
+
+function setQFilter(val) {
+  document.getElementById('filter-q-max').value = val;
+  applyFilters();
+}
+
+function resetFilters() {
+  document.getElementById('filter-bf-min').value   = '';
+  document.getElementById('filter-q-max').value    = '';
+  document.getElementById('filter-diag').value     = '';
+  document.getElementById('filter-sens-max').value = '';
+  applyFilters();
+}
+
+function resetAll() {
+  document.getElementById('tbl-search').value = '';
+  resetFilters();  // also calls dt.draw()
+}
+
+function _updateFilterBadge() {
+  const bfMin   = document.getElementById('filter-bf-min').value.trim();
+  const qMax    = document.getElementById('filter-q-max').value.trim();
+  const diag    = document.getElementById('filter-diag').value;
+  const sensMax = document.getElementById('filter-sens-max').value.trim();
+  const active  = [bfMin, qMax, diag, sensMax].filter(v => v !== '').length;
+  const badge   = document.getElementById('filter-active-badge');
+  if (active > 0) {
+    badge.style.display = '';
+    document.getElementById('filter-count-badge').textContent = active + ' filter' + (active > 1 ? 's' : '') + ' active';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Filter → Plot sync (delegate to unified applyHighlighting) ────────────────
+function updatePlotsForFilter() { applyHighlighting(); }
+
+// ── Static plots ──────────────────────────────────────────────────────────────
+function addStaticSection(containerId, title, imgUri) {
+  const c = document.getElementById(containerId);
+  const d = document.createElement('div');
+  d.className = 'plot-card';
+  d.innerHTML = `<p class="section-title">${esc(title)}</p>
+    <img src="${imgUri}" class="static-plot" alt="${esc(title)}">`;
+  c.appendChild(d);
+}
+
+function initStaticPlots() {
+  const P = D.plots || {};
+
+  const evidenceItems = [
+    ['evidence',      'Evidence Scatter Plots (BF vs BF)'],
+    ['convergence',   'EM Convergence'],
+    ['em_diagnostics','EM Restart Diagnostics'],
+    ['lc_convergence','Latent Class Convergence'],
+  ];
+  evidenceItems.forEach(([k, t]) => P[k] && addStaticSection('evidence-container', t, P[k]));
+
+  const diagItems = [
+    ['qq_plot',                   'HBM Residual Q-Q Plot'],
+    ['regression_qq_plot',        'Regression Residual Q-Q Plot'],
+    ['scale_location_hbm',        'HBM Scale-Location Plot'],
+    ['scale_location_regression', 'Regression Scale-Location Plot'],
+    ['calibration',               'Calibration Curve'],
+    ['calibration_comparison',    'Calibration Comparison'],
+    ['ppc_histogram',             'Posterior Predictive Check p-values'],
+    ['pit_histogram',             'Probability Integral Transform Histogram'],
+    ['nu_optimization',           'Student-t ν Optimisation'],
+  ];
+  let hasDiag = false;
+  diagItems.forEach(([k, t]) => {
+    if (P[k]) { addStaticSection('diagnostics-container', t, P[k]); hasDiag = true; }
+  });
+  if (hasDiag) document.getElementById('tab-diag-li').style.display = '';
+
+  const sensItems = [
+    ['sensitivity_tornado',  'Prior Sensitivity Tornado'],
+    ['sensitivity_heatmap',  'Sensitivity Heatmap'],
+    ['sensitivity_rankcorr', 'Sensitivity Rank Correlation'],
+  ];
+  let hasSens = false;
+  sensItems.forEach(([k, t]) => {
+    if (P[k]) { addStaticSection('sensitivity-container', t, P[k]); hasSens = true; }
+  });
+  if (hasSens) document.getElementById('tab-sens-li').style.display = '';
+
+  const diffItems = [
+    ['differential_volcano',        'Differential Volcano Plot'],
+    ['differential_evidence',       'Differential Evidence Plots'],
+    ['differential_scatter',        'Condition Scatter Comparison'],
+    ['differential_classification', 'Differential Classification'],
+    ['differential_ma',             'Differential MA Plot'],
+  ];
+  let hasDiff = false;
+  diffItems.forEach(([k, t]) => {
+    if (P[k]) { addStaticSection('differential-container', t, P[k]); hasDiff = true; }
+  });
+  if (hasDiff) document.getElementById('tab-diff-li').style.display = '';
+}
+
+// ── Methods tab ───────────────────────────────────────────────────────────────
+function initMethodsTab() {
+  const m = D.methods || {};
+  document.getElementById('methods-text').textContent = m.text || '';
+  document.getElementById('repro-block').textContent  = m.reproducibility || '';
+
+  const tbody = document.getElementById('params-tbody');
+  Object.entries(m.parameters || {}).forEach(([k, v]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="text-muted">${esc(k)}</td><td><code>${esc(v)}</code></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function copyMethods() {
+  const text = (D.methods || {}).text || '';
+  navigator.clipboard.writeText(text)
+    .then(() => alert('Methods text copied to clipboard!'))
+    .catch(() => alert('Copy failed — please select and copy the text manually.'));
+}
+
+// ── Selection / cross-highlighting ───────────────────────────────────────────
+
+function _getFilterNames() {
+  if (!dt) return null;
+  const total = (D.results || []).length;
+  const nodes = dt.rows({ search: 'applied' }).nodes().toArray();
+  if (nodes.length >= total) return null;  // no active filter
+  const s = new Set();
+  nodes.forEach(n => n && s.add(n.dataset.protein));
+  return s;
+}
+
+// Unified highlight: combines selection state + filter state
+function applyHighlighting() {
+  const filterNames = _getFilterNames();
+  const hasFilter   = filterNames !== null;
+  const hasSel      = selectedProteins.size > 0;
+
+  for (const id of ['volcano-plot', 'rankrank-plot']) {
+    const el = document.getElementById(id);
+    if (!el || !el.data) continue;
+    const opacities = [], sizes = [];
+    el.data.forEach(trace => {
+      const texts = trace.text || [];
+      opacities.push(texts.map(n => {
+        const sel  = hasSel && selectedProteins.has(n);
+        const vis  = !hasFilter || filterNames.has(n);
+        if (sel)  return 1.0;
+        if (!vis) return 0.05;
+        return hasSel ? 0.18 : 0.72;
+      }));
+      sizes.push(texts.map(n => {
+        const sel  = hasSel && selectedProteins.has(n);
+        const vis  = !hasFilter || filterNames.has(n);
+        if (sel)  return 13;
+        if (!vis) return 3;
+        return 6;
+      }));
+    });
+    Plotly.restyle(id, { 'marker.opacity': opacities, 'marker.size': sizes });
+  }
+}
+
+function _updateBanner() {
+  const banner = document.getElementById('selected-banner');
+  const n = selectedProteins.size;
+  if (n === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'flex';
+  const names = [...selectedProteins];
+  document.getElementById('selected-name').textContent =
+    n === 1 ? names[0] : n + ' proteins: ' + names.slice(0, 3).join(', ') + (n > 3 ? ' …' : '');
+}
+
+function _updateTableHighlight() {
+  document.querySelectorAll('#tbl-body tr').forEach(tr => {
+    tr.style.background = selectedProteins.has(tr.dataset.protein) ? '#e3f2fd' : '';
+  });
+}
+
+function toggleSelected(protein) {
+  if (selectedProteins.has(protein)) {
+    selectedProteins.delete(protein);
+  } else {
+    selectedProteins.add(protein);
+  }
+  _updateBanner();
+  _updateTableHighlight();
+  applyHighlighting();
+  dt && dt.draw();
+}
+
+function clearSelection() {
+  selectedProteins.clear();
+  _updateBanner();
+  _updateTableHighlight();
+  applyHighlighting();
+  dt && dt.draw();
+}
+
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const bait = (D.meta || {}).bait || 'results';
+  const hdr  = ['Protein','BF','posterior_prob','q','mean_log2FC',
+                 'bf_enrichment','bf_correlation','bf_detected','evidence',
+                 'diagnostic_flag','sensitivity_range'];
+  const rows = (D.results || []).map(r =>
+    [r.protein, r.bf, r.posterior_prob, r.q, r.mean_log2fc,
+     r.bf_enrichment, r.bf_correlation, r.bf_detected, r.evidence_label,
+     r.diagnostic_flag, r.sensitivity_range].join(','));
+  const csv = [hdr.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: `results_${bait}.csv` });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Shape helpers ─────────────────────────────────────────────────────────────
+function hline(y, color = '#ccc') {
+  return { type:'line', xref:'paper', x0:0, x1:1, y0:y, y1:y,
+           line:{ color, dash:'dash', width:1 } };
+}
+function vline(x, color = '#ccc') {
+  return { type:'line', yref:'paper', x0:x, x1:x, y0:0, y1:1,
+           line:{ color, dash:'dash', width:1 } };
+}
+
+// ── HTML escaping ─────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

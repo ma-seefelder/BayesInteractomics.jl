@@ -1,0 +1,9 @@
+[deps]
+scikit-learn = ">=1.4,<1.6"
+pandas = ""
+numpy = ""
+openpyxl = ""
+ngboost = ""
+
+[platforms]
+linux-64 = true

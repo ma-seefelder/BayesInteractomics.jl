@@ -1,0 +1,9 @@
+[deps]
+BayesInteractomics = "07c96638-0f98-4a6b-9a09-78dfb944548d"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[sources]
+BayesInteractomics = {path = "/home/mseefelder/Github/BayesInteractomics/docs/.."}
+
+[compat]
+Documenter = "1"
