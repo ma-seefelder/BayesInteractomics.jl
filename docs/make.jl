@@ -37,5 +37,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/ma-seefelder/BayesInteractomics.jl",
-    devbranch="dev",
+    devbranch="master",
 )
