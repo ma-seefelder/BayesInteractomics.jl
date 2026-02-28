@@ -1,7 +1,7 @@
 name = "BayesInteractomics"
 uuid = "07c96638-0f98-4a6b-9a09-78dfb944548d"
 desc = "Bayesian framework for analyzing protein interactome data from AP-MS and proximity labeling experiments"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Manuel Seefelder <manuel.seefelder@uni-ulm.de>"]
 
 [deps]
