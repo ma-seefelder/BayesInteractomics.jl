@@ -17,12 +17,7 @@ training_metrics_Adam_1e-3.csv
 /wandb
 trained_dnn_model.bson
 training_metrics.csv
-/.CondaPkg
-/.CondaPkg
-/.CondaPkg
-.CondaPkg/meta
-/src/dnn/.CondaPkg
-.CondaPkg/pixi.toml
+**/.CondaPkg/
 /encodings/topological_negatives_raw_data
 /encodings/datasets_without_topological
 encodings/topological_negatives.csv
