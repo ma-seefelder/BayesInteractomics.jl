@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Examples · BayesInteractomics.jl</title><meta name="title" content="Examples · BayesInteractomics.jl"/><meta property="og:title" content="Examples · BayesInteractomics.jl"/><meta property="twitter:title" content="Examples · BayesInteractomics.jl"/><meta name="description" content="Documentation for BayesInteractomics.jl."/><meta property="og:description" content="Documentation for BayesInteractomics.jl."/><meta property="twitter:description" content="Documentation for BayesInteractomics.jl."/><meta property="og:url" content="https://ma-seefelder.github.io/BayesInteractomics.jl/examples/"/><meta property="twitter:url" content="https://ma-seefelder.github.io/BayesInteractomics.jl/examples/"/><link rel="canonical" href="https://ma-seefelder.github.io/BayesInteractomics.jl/examples/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">BayesInteractomics.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../tutorial/">Tutorial</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../data_loading/">Data Loading</a></li><li><a class="tocitem" href="../data_curation/">Data Curation</a></li><li><a class="tocitem" href="../analysis/">Analysis Pipeline</a></li><li><a class="tocitem" href="../model_fitting/">Model Fitting</a></li><li><a class="tocitem" href="../model_evaluation/">Model Evaluation</a></li><li><a class="tocitem" href="../diagnostics/">Diagnostics</a></li><li><a class="tocitem" href="../differential_analysis/">Differential Analysis</a></li><li><a class="tocitem" href="../visualization/">Visualization</a></li><li><a class="tocitem" href="../reports/">Reports</a></li><li><a class="tocitem" href="../network_analysis/">Network Analysis</a></li></ul></li><li class="is-active"><a class="tocitem" href>Examples</a><ul class="internal"><li><a class="tocitem" href="#Example-1:-HAP40-Interactome-Analysis"><span>Example 1: HAP40 Interactome Analysis</span></a></li><li><a class="tocitem" href="#Example-2:-Meta-Analysis-with-Multiple-Imputation"><span>Example 2: Meta-Analysis with Multiple Imputation</span></a></li><li><a class="tocitem" href="#Example-3:-Custom-Visualization"><span>Example 3: Custom Visualization</span></a></li><li><a class="tocitem" href="#Tips-for-Real-Analyses"><span>Tips for Real Analyses</span></a></li></ul></li><li><a class="tocitem" href="../mathematical_background/">Mathematical Background</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Examples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Examples</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ma-seefelder/BayesInteractomics.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ma-seefelder/BayesInteractomics.jl/blob/main/docs/src/examples.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Examples"><a class="docs-heading-anchor" href="#Examples">Examples</a><a id="Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Examples" title="Permalink"></a></h1><p>This page showcases real-world analysis workflows using BayesInteractomics. All example scripts are available in the <code>examples/</code> directory of the package repository.</p><h2 id="Example-1:-HAP40-Interactome-Analysis"><a class="docs-heading-anchor" href="#Example-1:-HAP40-Interactome-Analysis">Example 1: HAP40 Interactome Analysis</a><a id="Example-1:-HAP40-Interactome-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Example-1:-HAP40-Interactome-Analysis" title="Permalink"></a></h2><p>This example demonstrates analyzing the interactome of HAP40 (Huntingtin-associated protein 40) using data from multiple experimental protocols.</p><h3 id="Scientific-Context"><a class="docs-heading-anchor" href="#Scientific-Context">Scientific Context</a><a id="Scientific-Context-1"></a><a class="docs-heading-anchor-permalink" href="#Scientific-Context" title="Permalink"></a></h3><p>HAP40 is a protein that associates with Huntingtin (HTT) and plays important roles in neurodegenerative diseases. This analysis identifies HAP40-interacting proteins by combining evidence from two different affinity purification approaches:</p><ul><li>GST-tagged HAP40 pulldown</li><li>Strep-tagged HAP40 pulldown</li></ul><h3 id="Data-Structure"><a class="docs-heading-anchor" href="#Data-Structure">Data Structure</a><a id="Data-Structure-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Structure" title="Permalink"></a></h3><p>The experiment includes:</p><ul><li><strong>Two protocols</strong>: GST-HAP40 and HAP40-Strep</li><li><strong>Three experiments per protocol</strong>: Representing different biological conditions or replicates</li><li><strong>Multiple replicates</strong>: 3 control and 3 sample replicates per experiment</li></ul><h3 id="Complete-Workflow"><a class="docs-heading-anchor" href="#Complete-Workflow">Complete Workflow</a><a id="Complete-Workflow-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-Workflow" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BayesInteractomics
+
+# Define base directory for results
+basepath = &quot;path/to/HAP40_analysis&quot;
+
+# Configure analysis with two protocols
+config = CONFIG(
+    # Input files - one per protocol
+    datafile = [
+        &quot;data/GST_HAP40.xlsx&quot;,
+        &quot;data/HAP40_Strep.xlsx&quot;
+    ],
+
+    # Control sample column mappings
+    # Protocol 1 (GST-HAP40): 3 experiments with 3 replicates each
+    # Protocol 2 (HAP40-Strep): 3 experiments with varying replicates
+    control_cols = [
+        Dict(1 =&gt; [2,3,4], 2 =&gt; [5,6,7], 3 =&gt; [8,9,10]),    # Protocol 1: 9 controls
+        Dict(1 =&gt; [2,3,4], 2 =&gt; [5], 3 =&gt; [6,7])            # Protocol 2: 6 controls
+    ],
+
+    # Sample column mappings
+    sample_cols = [
+        Dict(1 =&gt; [11,12,13], 2 =&gt; [14,15,16], 3 =&gt; [17,18,19]), # Protocol 1: 9 samples
+        Dict(1 =&gt; [8,9,10], 2 =&gt; [11,12,13], 3 =&gt; [14,15])       # Protocol 2: 8 samples
+    ],
+
+    # Bait protein specification
+    poi = &quot;9606.ENSP00000479624&quot;,  # UniProt ID for HAP40
+    refID = 1,                      # HAP40 is in first row of data
+
+    # Total sample counts
+    n_controls = 15,  # 9 + 6
+    n_samples = 17,   # 9 + 8
+
+    # Normalization - IMPORTANT for multiple protocols
+    normalise_protocols = true,
+
+    # Output files
+    H0_file = joinpath(basepath, &quot;copula_H0.xlsx&quot;),
+    results_file = joinpath(basepath, &quot;final_results.xlsx&quot;),
+    volcano_file = joinpath(basepath, &quot;volcano_plot.svg&quot;),
+    convergence_file = joinpath(basepath, &quot;convergence.svg&quot;),
+    evidence_file = joinpath(basepath, &quot;evidence.svg&quot;),
+
+    # Visualization options
+    vc_legend_pos = :topleft,
+    plotHBMdists = false,   # Set true to plot individual protein distributions
+    plotlog2fc = false,
+    plotregr = false,
+    verbose = true
+)
+
+# Run complete analysis
+results = run_analysis(config)
+
+# Examine top interactions
+top_interactions = first(
+    sort(results, :Posterior_Probability, rev=true),
+    20
+)
+
+println(&quot;Top 20 HAP40 interactors:&quot;)
+println(top_interactions[:, [:Protein, :Posterior_Probability, :log2FC_mean,
+                              :BF_enrichment, :BF_correlation, :BF_detection]])
+
+# Filter for high-confidence hits
+high_confidence = filter(
+    row -&gt; row.Posterior_Probability &gt; 0.95 &amp;&amp; row.log2FC_mean &gt; 1.0,
+    results
+)
+
+println(&quot;\nHigh-confidence interactions (P &gt; 0.95, log2FC &gt; 1): $(nrow(high_confidence))&quot;)</code></pre><h3 id="Analyzing-Individual-Protocols"><a class="docs-heading-anchor" href="#Analyzing-Individual-Protocols">Analyzing Individual Protocols</a><a id="Analyzing-Individual-Protocols-1"></a><a class="docs-heading-anchor-permalink" href="#Analyzing-Individual-Protocols" title="Permalink"></a></h3><p>You can also analyze each protocol separately to understand protocol-specific effects:</p><pre><code class="language-julia hljs"># GST-HAP40 only
+gst_config = CONFIG(
+    datafile = [&quot;data/GST_HAP40.xlsx&quot;],
+    control_cols = [Dict(1 =&gt; [2,3,4], 2 =&gt; [5,6,7], 3 =&gt; [8,9,10])],
+    sample_cols = [Dict(1 =&gt; [11,12,13], 2 =&gt; [14,15,16], 3 =&gt; [17,18,19])],
+    poi = &quot;9606.ENSP00000479624&quot;,
+    refID = 1,
+    n_controls = 9,
+    n_samples = 9,
+    normalise_protocols = false,  # Single protocol
+    H0_file = joinpath(basepath, &quot;GST_HAP40/copula_H0.xlsx&quot;),
+    results_file = joinpath(basepath, &quot;GST_HAP40/results.xlsx&quot;),
+    volcano_file = joinpath(basepath, &quot;GST_HAP40/volcano.svg&quot;)
+)
+
+gst_results = run_analysis(gst_config)
+
+# HAP40-Strep only
+strep_config = CONFIG(
+    datafile = [&quot;data/HAP40_Strep.xlsx&quot;],
+    control_cols = [Dict(1 =&gt; [2,3,4], 2 =&gt; [5], 3 =&gt; [6,7])],
+    sample_cols = [Dict(1 =&gt; [8,9,10], 2 =&gt; [11,12,13], 3 =&gt; [14,15])],
+    poi = &quot;9606.ENSP00000479624&quot;,
+    refID = 1,
+    n_controls = 6,
+    n_samples = 8,
+    normalise_protocols = false,
+    H0_file = joinpath(basepath, &quot;HAP40_Strep/copula_H0.xlsx&quot;),
+    results_file = joinpath(basepath, &quot;HAP40_Strep/results.xlsx&quot;),
+    volcano_file = joinpath(basepath, &quot;HAP40_Strep/volcano.svg&quot;)
+)
+
+strep_results = run_analysis(strep_config)
+
+# Compare results across protocols
+using DataFrames, StatsBase
+
+# Merge results
+merged = innerjoin(
+    gst_results[:, [:Protein, :Posterior_Probability =&gt; :PP_GST]],
+    strep_results[:, [:Protein, :Posterior_Probability =&gt; :PP_Strep]],
+    on = :Protein
+)
+
+# Calculate correlation
+cor_pp = cor(merged.PP_GST, merged.PP_Strep)
+println(&quot;Correlation between protocol posterior probabilities: $(round(cor_pp, digits=3))&quot;)
+
+# Identify protocol-consistent hits
+consistent_hits = filter(
+    row -&gt; row.PP_GST &gt; 0.9 &amp;&amp; row.PP_Strep &gt; 0.9,
+    merged
+)
+println(&quot;Proteins with high confidence in both protocols: $(nrow(consistent_hits))&quot;)</code></pre><h2 id="Example-2:-Meta-Analysis-with-Multiple-Imputation"><a class="docs-heading-anchor" href="#Example-2:-Meta-Analysis-with-Multiple-Imputation">Example 2: Meta-Analysis with Multiple Imputation</a><a id="Example-2:-Meta-Analysis-with-Multiple-Imputation-1"></a><a class="docs-heading-anchor-permalink" href="#Example-2:-Meta-Analysis-with-Multiple-Imputation" title="Permalink"></a></h2><p>This advanced example demonstrates combining data from multiple experiments with substantial missing data using multiple imputation.</p><h3 id="Scientific-Context-2"><a class="docs-heading-anchor" href="#Scientific-Context-2">Scientific Context</a><a class="docs-heading-anchor-permalink" href="#Scientific-Context-2" title="Permalink"></a></h3><p>This analysis examines the interactome of Huntingtin (HTT), the protein implicated in Huntington&#39;s disease. Data come from 6 different published studies, each using different AP-MS protocols. The combined dataset has substantial missing data (~40%), requiring multiple imputation for robust inference.</p><h3 id="Workflow-Overview"><a class="docs-heading-anchor" href="#Workflow-Overview">Workflow Overview</a><a id="Workflow-Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Workflow-Overview" title="Permalink"></a></h3><ol><li>Impute missing data using an appropriate method (e.g., MissForest, KNN)</li><li>Create M imputed datasets (typically M=5)</li><li>Run BayesInteractomics on each imputed dataset</li><li>Pool results following Rubin&#39;s rules</li></ol><h3 id="Data-Preparation"><a class="docs-heading-anchor" href="#Data-Preparation">Data Preparation</a><a id="Data-Preparation-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Preparation" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BayesInteractomics
+
+const BASEPATH = &quot;path/to/HTT_meta_analysis&quot;
+
+# Helper function to count total samples across experiments
+function count_samples(column_dicts, n_dummy)
+    total = 0
+    for dict in column_dicts
+        n = sum(length(cols) for (_, cols) in dict)
+        total += n
+    end
+    return total - n_dummy
+end
+
+# Define column mappings for 6 protocols (studies)
+# Note: Dummy columns (162-165) are used for padding where experiments are missing
+
+# Sample columns for each protocol
+s_grecco    = Dict(1 =&gt; [2,3,4,162], 2 =&gt; [5,6,7,162], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+s_gutierrez = Dict(1 =&gt; [29,30,31,162], 2 =&gt; [162,163,164,165], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+s_sap       = Dict(1 =&gt; [36,37,38,39], 2 =&gt; [162,163,164,165], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+s_grecco_2  = Dict(1 =&gt; [48,49,50,51], 2 =&gt; [52,53,54,55], 3 =&gt; [60,61,62,63], 4 =&gt; [64,65,66,162])
+s_grecco_3  = Dict(1 =&gt; [92,93,94,162], 2 =&gt; [95,96,97,162], 3 =&gt; [100,101,102,162], 4 =&gt; [103,104,105,162])
+s_grecco_4  = Dict(1 =&gt; [128,129,130,162], 2 =&gt; [131,132,133,162], 3 =&gt; [137,138,139,162], 4 =&gt; [140,141,142,162])
+
+# Control columns for each protocol
+c_grecco    = Dict(1 =&gt; [14,15,16,162], 2 =&gt; [17,18,19,162], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+c_gutierrez = Dict(1 =&gt; [26,27,28,162], 2 =&gt; [162,163,164,165], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+c_sap       = Dict(1 =&gt; [32,33,34,35], 2 =&gt; [162,163,164,165], 3 =&gt; [162,163,164,165], 4 =&gt; [162,163,164,165])
+c_grecco_2  = Dict(1 =&gt; [44,45,46,47], 2 =&gt; [44,45,46,47], 3 =&gt; [56,57,58,59], 4 =&gt; [56,57,58,59])
+c_grecco_3  = Dict(1 =&gt; [90, 91, 162, 163], 2 =&gt; [90, 91, 162, 163], 3 =&gt; [98,99,162,163], 4 =&gt; [98,99,162,163])
+c_grecco_4  = Dict(1 =&gt; [125,126,127,162], 2 =&gt; [125,126,127,162], 3 =&gt; [134,135,136,162], 4 =&gt; [134,135,136,162])
+
+sample_cols = [s_grecco, s_gutierrez, s_sap, s_grecco_2, s_grecco_3, s_grecco_4]
+control_cols = [c_grecco, c_gutierrez, c_sap, c_grecco_2, c_grecco_3, c_grecco_4]
+
+# Number of dummy columns used for padding
+n_dummy_samples = 44
+n_dummy_controls = 47</code></pre><h3 id="Loading-Imputed-Datasets"><a class="docs-heading-anchor" href="#Loading-Imputed-Datasets">Loading Imputed Datasets</a><a id="Loading-Imputed-Datasets-1"></a><a class="docs-heading-anchor-permalink" href="#Loading-Imputed-Datasets" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Load M=5 imputed datasets
+imputed_data = InteractionData[]
+
+for i in 1:5
+    # Each imputation uses the same column mappings
+    files = [
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;),
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;),
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;),
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;),
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;),
+        joinpath(BASEPATH, &quot;imputed_data/dataset_imp_$i.xlsx&quot;)
+    ]
+
+    data = load_data(
+        files,
+        sample_cols,
+        control_cols,
+        normalise_protocols = true
+    )
+
+    push!(imputed_data, data)
+    @info &quot;Loaded imputed dataset $i&quot;
+end
+
+# Also load raw data for Beta-Bernoulli model (uses detection, not intensity)
+raw_data = load_data(
+    [joinpath(BASEPATH, &quot;dataset.xlsx&quot;) for _ in 1:6],
+    sample_cols,
+    control_cols,
+    normalise_protocols = true
+)</code></pre><h3 id="Running-Analysis-on-Imputed-Data"><a class="docs-heading-anchor" href="#Running-Analysis-on-Imputed-Data">Running Analysis on Imputed Data</a><a id="Running-Analysis-on-Imputed-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Running-Analysis-on-Imputed-Data" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Define analysis configuration
+analysis_config = CONFIG(
+    sample_cols = sample_cols,
+    control_cols = control_cols,
+    n_controls = count_samples(control_cols, n_dummy_controls),
+    n_samples = count_samples(sample_cols, n_dummy_samples),
+    refID = 237,  # Row index of HTT in dataset
+    poi = &quot;ENSP00000347184&quot;,  # UniProt ID for HTT
+
+    # File paths
+    datafile = [joinpath(BASEPATH, &quot;dataset.xlsx&quot;) for _ in 1:6],
+    H0_file = joinpath(BASEPATH, &quot;wtHTT/copula_H0.xlsx&quot;),
+    results_file = joinpath(BASEPATH, &quot;wtHTT/results.xlsx&quot;),
+    volcano_file = joinpath(BASEPATH, &quot;wtHTT/volcano_plot.svg&quot;),
+    convergence_file = joinpath(BASEPATH, &quot;wtHTT/convergence.svg&quot;),
+    evidence_file = joinpath(BASEPATH, &quot;wtHTT/evidence.svg&quot;),
+
+    # Analysis parameters
+    normalise_protocols = true,
+    verbose = true
+)
+
+# Run analysis with multiple imputation
+# This will:
+# 1. Run Beta-Bernoulli on raw_data (detection model doesn&#39;t use imputed values)
+# 2. Run HBM and Regression on each imputed dataset
+# 3. Pool Bayes factors across imputations
+results = run_analysis(analysis_config, imputed_data, raw_data)
+
+# Results now incorporate uncertainty from both:
+# - Statistical inference (Bayesian posterior)
+# - Missing data (imputation variance)
+
+println(&quot;Analysis complete. Found $(nrow(filter(r -&gt; r.Posterior_Probability &gt; 0.95, results))) high-confidence interactions.&quot;)</code></pre><h3 id="Comparing-Wild-type-vs-Mutant-HTT"><a class="docs-heading-anchor" href="#Comparing-Wild-type-vs-Mutant-HTT">Comparing Wild-type vs Mutant HTT</a><a id="Comparing-Wild-type-vs-Mutant-HTT-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-Wild-type-vs-Mutant-HTT" title="Permalink"></a></h3><p>The meta-analysis example also includes comparing interactomes of wild-type versus mutant HTT:</p><pre><code class="language-julia hljs"># Configure comparison by swapping sample/control assignments
+# Wild-type HTT as control, Mutant HTT as sample
+comparison_config = CONFIG(
+    sample_cols = [...],      # Mutant HTT columns
+    control_cols = [...],     # Wild-type HTT columns
+    # ... other parameters same as above
+)
+
+comparison_results = run_analysis(comparison_config, imputed_data, raw_data)
+
+# Identify differential interactors
+# High probability in mutant, low in wild-type
+differential = filter(
+    row -&gt; row.Posterior_Probability &gt; 0.9 &amp;&amp; row.log2FC_mean &gt; 2.0,
+    comparison_results
+)
+
+println(&quot;Proteins preferentially enriched with mutant HTT: $(nrow(differential))&quot;)</code></pre><h2 id="Example-3:-Custom-Visualization"><a class="docs-heading-anchor" href="#Example-3:-Custom-Visualization">Example 3: Custom Visualization</a><a id="Example-3:-Custom-Visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Example-3:-Custom-Visualization" title="Permalink"></a></h2><p>BayesInteractomics provides flexible plotting functions. Here are examples of customizing visualizations:</p><h3 id="Volcano-Plot-Customization"><a class="docs-heading-anchor" href="#Volcano-Plot-Customization">Volcano Plot Customization</a><a id="Volcano-Plot-Customization-1"></a><a class="docs-heading-anchor-permalink" href="#Volcano-Plot-Customization" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BayesInteractomics, StatsPlots
+
+# After running analysis
+results = run_analysis(config)
+
+# Extract data for plotting
+log2fc = results.log2FC_mean
+neg_log_p = -log10.(1 .- results.Posterior_Probability)
+posterior_prob = results.Posterior_Probability
+
+# Create custom volcano plot
+volcano = scatter(
+    log2fc,
+    neg_log_p,
+    xlabel = &quot;Log2 Fold Change&quot;,
+    ylabel = &quot;-Log10(1 - Posterior Probability)&quot;,
+    title = &quot;HAP40 Interactome Volcano Plot&quot;,
+    marker_z = posterior_prob,
+    color = :viridis,
+    colorbar_title = &quot;Posterior Probability&quot;,
+    markersize = 3,
+    alpha = 0.7,
+    legend = false
+)
+
+# Add threshold lines
+hline!([2], linestyle=:dash, color=:red, label=&quot;P &gt; 0.99&quot;)
+vline!([-1, 1], linestyle=:dash, color=:blue, label=&quot;2-fold change&quot;)
+
+# Annotate top hits
+top_n = 10
+top_proteins = first(sort(results, :Posterior_Probability, rev=true), top_n)
+for row in eachrow(top_proteins)
+    annotate!(row.log2FC_mean, -log10(1 - row.Posterior_Probability),
+              text(row.Protein, 6, :left))
+end
+
+savefig(volcano, &quot;custom_volcano_plot.svg&quot;)</code></pre><h3 id="Evidence-Distribution-Plots"><a class="docs-heading-anchor" href="#Evidence-Distribution-Plots">Evidence Distribution Plots</a><a id="Evidence-Distribution-Plots-1"></a><a class="docs-heading-anchor-permalink" href="#Evidence-Distribution-Plots" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Plot distribution of individual Bayes factors
+using StatsPlots
+
+p1 = histogram(
+    log10.(results.BF_enrichment),
+    xlabel = &quot;Log10(BF Enrichment)&quot;,
+    ylabel = &quot;Count&quot;,
+    title = &quot;Enrichment Evidence&quot;,
+    bins = 50,
+    alpha = 0.7,
+    color = :blue
+)
+
+p2 = histogram(
+    log10.(results.BF_correlation),
+    xlabel = &quot;Log10(BF Correlation)&quot;,
+    ylabel = &quot;Count&quot;,
+    title = &quot;Correlation Evidence&quot;,
+    bins = 50,
+    alpha = 0.7,
+    color = :green
+)
+
+p3 = histogram(
+    log10.(results.BF_detection),
+    xlabel = &quot;Log10(BF Detection)&quot;,
+    ylabel = &quot;Count&quot;,
+    title = &quot;Detection Evidence&quot;,
+    bins = 50,
+    alpha = 0.7,
+    color = :red
+)
+
+evidence_plot = plot(p1, p2, p3, layout=(1,3), size=(1200, 400))
+savefig(evidence_plot, &quot;evidence_distributions.svg&quot;)</code></pre><h3 id="Comparing-Results-Across-Conditions"><a class="docs-heading-anchor" href="#Comparing-Results-Across-Conditions">Comparing Results Across Conditions</a><a id="Comparing-Results-Across-Conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-Results-Across-Conditions" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Compare interactomes between two conditions
+using DataFrames, StatsPlots
+
+# Load results from two conditions
+wt_results = run_analysis(wt_config)
+mut_results = run_analysis(mut_config)
+
+# Merge on protein ID
+comparison = innerjoin(
+    wt_results[:, [:Protein, :Posterior_Probability =&gt; :PP_WT, :log2FC_mean =&gt; :FC_WT]],
+    mut_results[:, [:Protein, :Posterior_Probability =&gt; :PP_MUT, :log2FC_mean =&gt; :FC_MUT]],
+    on = :Protein
+)
+
+# Scatter plot comparing posterior probabilities
+scatter(
+    comparison.PP_WT,
+    comparison.PP_MUT,
+    xlabel = &quot;Posterior Probability (WT)&quot;,
+    ylabel = &quot;Posterior Probability (Mutant)&quot;,
+    title = &quot;Interactome Comparison: WT vs Mutant&quot;,
+    markersize = 3,
+    alpha = 0.6,
+    color = :steelblue,
+    legend = false
+)
+
+# Add diagonal line
+plot!([0, 1], [0, 1], linestyle=:dash, color=:red, label=&quot;Equal&quot;)
+
+# Annotate differentially enriched
+differential = filter(row -&gt; abs(row.PP_WT - row.PP_MUT) &gt; 0.5, comparison)
+for row in eachrow(differential)
+    annotate!(row.PP_WT, row.PP_MUT, text(row.Protein, 5, :left))
+end
+
+savefig(&quot;wt_vs_mutant_comparison.svg&quot;)</code></pre><h2 id="Tips-for-Real-Analyses"><a class="docs-heading-anchor" href="#Tips-for-Real-Analyses">Tips for Real Analyses</a><a id="Tips-for-Real-Analyses-1"></a><a class="docs-heading-anchor-permalink" href="#Tips-for-Real-Analyses" title="Permalink"></a></h2><h3 id="Data-Quality-Checks"><a class="docs-heading-anchor" href="#Data-Quality-Checks">Data Quality Checks</a><a id="Data-Quality-Checks-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Quality-Checks" title="Permalink"></a></h3><p>Before running the full analysis, perform quality checks:</p><pre><code class="language-julia hljs"># Load data
+data = load_data(files, sample_cols, control_cols)
+
+# Check data dimensions
+println(&quot;Number of proteins: $(getNoProteins(data))&quot;)
+println(&quot;Number of protocols: $(getNoProtocols(data))&quot;)
+
+# Check missing data percentage
+function missing_percentage(data::InteractionData)
+    total_cells = 0
+    missing_cells = 0
+
+    for protocol in data
+        for (exp_id, exp_data) in protocol.experiments
+            total_cells += length(exp_data)
+            missing_cells += sum(ismissing.(exp_data))
+        end
+    end
+
+    return 100 * missing_cells / total_cells
+end
+
+println(&quot;Missing data: $(round(missing_percentage(data), digits=1))%&quot;)</code></pre><h3 id="Batch-Processing-Multiple-Baits"><a class="docs-heading-anchor" href="#Batch-Processing-Multiple-Baits">Batch Processing Multiple Baits</a><a id="Batch-Processing-Multiple-Baits-1"></a><a class="docs-heading-anchor-permalink" href="#Batch-Processing-Multiple-Baits" title="Permalink"></a></h3><p>For analyzing multiple bait proteins in one dataset:</p><pre><code class="language-julia hljs"># List of bait proteins
+baits = [
+    (name=&quot;HAP40&quot;, id=&quot;ENSP00000479624&quot;, refID=1),
+    (name=&quot;HTT&quot;, id=&quot;ENSP00000347184&quot;, refID=237),
+    (name=&quot;PROTEIN_X&quot;, id=&quot;ENSP00000123456&quot;, refID=500)
+]
+
+# Analyze each bait
+all_results = Dict()
+
+for bait in baits
+    println(&quot;Analyzing $(bait.name)...&quot;)
+
+    config = CONFIG(
+        # ... common parameters ...
+        poi = bait.id,
+        refID = bait.refID,
+        results_file = &quot;results_$(bait.name).xlsx&quot;
+    )
+
+    results = run_analysis(config)
+    all_results[bait.name] = results
+
+    println(&quot;  Found $(nrow(filter(r -&gt; r.Posterior_Probability &gt; 0.95, results))) interactions&quot;)
+end</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../network_analysis/">« Network Analysis</a><a class="docs-footer-nextpage" href="../mathematical_background/">Mathematical Background »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Saturday 28 February 2026 08:35">Saturday 28 February 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

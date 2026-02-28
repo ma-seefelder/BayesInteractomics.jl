@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Network Analysis · BayesInteractomics.jl</title><meta name="title" content="Network Analysis · BayesInteractomics.jl"/><meta property="og:title" content="Network Analysis · BayesInteractomics.jl"/><meta property="twitter:title" content="Network Analysis · BayesInteractomics.jl"/><meta name="description" content="Documentation for BayesInteractomics.jl."/><meta property="og:description" content="Documentation for BayesInteractomics.jl."/><meta property="twitter:description" content="Documentation for BayesInteractomics.jl."/><meta property="og:url" content="https://ma-seefelder.github.io/BayesInteractomics.jl/network_analysis/"/><meta property="twitter:url" content="https://ma-seefelder.github.io/BayesInteractomics.jl/network_analysis/"/><link rel="canonical" href="https://ma-seefelder.github.io/BayesInteractomics.jl/network_analysis/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">BayesInteractomics.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../tutorial/">Tutorial</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="../data_loading/">Data Loading</a></li><li><a class="tocitem" href="../data_curation/">Data Curation</a></li><li><a class="tocitem" href="../analysis/">Analysis Pipeline</a></li><li><a class="tocitem" href="../model_fitting/">Model Fitting</a></li><li><a class="tocitem" href="../model_evaluation/">Model Evaluation</a></li><li><a class="tocitem" href="../diagnostics/">Diagnostics</a></li><li><a class="tocitem" href="../differential_analysis/">Differential Analysis</a></li><li><a class="tocitem" href="../visualization/">Visualization</a></li><li><a class="tocitem" href="../reports/">Reports</a></li><li class="is-active"><a class="tocitem" href>Network Analysis</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Activation"><span>Activation</span></a></li><li><a class="tocitem" href="#Quick-Start"><span>Quick Start</span></a></li><li><a class="tocitem" href="#Data-Types"><span>Data Types</span></a></li><li><a class="tocitem" href="#Network-Construction"><span>Network Construction</span></a></li><li><a class="tocitem" href="#Network-Statistics"><span>Network Statistics</span></a></li><li><a class="tocitem" href="#Centrality-Analysis"><span>Centrality Analysis</span></a></li><li><a class="tocitem" href="#Community-Detection"><span>Community Detection</span></a></li><li><a class="tocitem" href="#Visualization"><span>Visualization</span></a></li><li><a class="tocitem" href="#Export"><span>Export</span></a></li><li><a class="tocitem" href="#Complete-Workflow-Example"><span>Complete Workflow Example</span></a></li><li><a class="tocitem" href="#Advanced-Topics"><span>Advanced Topics</span></a></li><li><a class="tocitem" href="#Best-Practices"><span>Best Practices</span></a></li><li><a class="tocitem" href="#Troubleshooting"><span>Troubleshooting</span></a></li><li><a class="tocitem" href="#References"><span>References</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../examples/">Examples</a></li><li><a class="tocitem" href="../mathematical_background/">Mathematical Background</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li class="is-active"><a href>Network Analysis</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Network Analysis</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ma-seefelder/BayesInteractomics.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ma-seefelder/BayesInteractomics.jl/blob/main/docs/src/network_analysis.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Network-Analysis"><a class="docs-heading-anchor" href="#Network-Analysis">Network Analysis</a><a id="Network-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Network-Analysis" title="Permalink"></a></h1><p>BayesInteractomics provides comprehensive network analysis capabilities through a package extension that enables visualization and topological analysis of protein interaction networks. This extension automatically loads when you import the required graph packages.</p><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>The network analysis extension transforms your Bayesian analysis results into graph structures that can be:</p><ul><li>Visualized with customizable layouts and styling</li><li>Analyzed for topological properties (density, clustering, path lengths)</li><li>Searched for hub proteins using centrality measures</li><li>Partitioned into communities representing protein complexes or functional modules</li><li>Exported to standard formats for external tools (Cytoscape, Gephi)</li></ul><h2 id="Activation"><a class="docs-heading-anchor" href="#Activation">Activation</a><a id="Activation-1"></a><a class="docs-heading-anchor-permalink" href="#Activation" title="Permalink"></a></h2><p>Network analysis features are provided via package extension and require loading the graph packages:</p><pre><code class="language-julia hljs">using BayesInteractomics
+using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+
+# Network functions are now available</code></pre><p>Without loading these packages, network functions will throw an error directing you to load the required dependencies.</p><h2 id="Quick-Start"><a class="docs-heading-anchor" href="#Quick-Start">Quick Start</a><a id="Quick-Start-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-Start" title="Permalink"></a></h2><pre><code class="language-julia hljs">using BayesInteractomics
+using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+
+# Run standard Bayesian analysis
+data = load_data([&quot;experiment.xlsx&quot;], sample_cols, control_cols)
+results = analyse(data, &quot;H0.xlsx&quot;, refID=1, n_controls=3, n_samples=3)
+
+# Wrap results with bait protein metadata
+ar = AnalysisResult(results, bait_protein=&quot;MYC&quot;, bait_index=1)
+
+# Build high-confidence network
+net = build_network(ar,
+    posterior_threshold = 0.8,
+    q_threshold = 0.01
+)
+
+# Analyze network properties
+stats = network_statistics(net)
+println(&quot;Network has $(stats.n_nodes) nodes and $(stats.n_edges) edges&quot;)
+println(&quot;Density: $(stats.density)&quot;)
+
+# Find hub proteins
+cm = centrality_measures(net)
+top_hubs = get_top_hubs(cm, by=:pagerank, n=10)
+
+# Detect protein complexes
+communities = detect_communities(net, algorithm=:louvain)
+println(&quot;Found $(communities.n_communities) communities&quot;)
+
+# Visualize
+plot_network(net, layout=:spring, highlight_bait=true)
+
+# Export for Cytoscape
+export_graphml(net, &quot;network.graphml&quot;)</code></pre><h2 id="Data-Types"><a class="docs-heading-anchor" href="#Data-Types">Data Types</a><a id="Data-Types-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Types" title="Permalink"></a></h2><h3 id="AbstractAnalysisResult"><a class="docs-heading-anchor" href="#AbstractAnalysisResult">AbstractAnalysisResult</a><a id="AbstractAnalysisResult-1"></a><a class="docs-heading-anchor-permalink" href="#AbstractAnalysisResult" title="Permalink"></a></h3><p>Base type for analysis results that can be used for network construction. Two implementations are provided:</p><h4 id="AnalysisResult"><a class="docs-heading-anchor" href="#AnalysisResult">AnalysisResult</a><a id="AnalysisResult-1"></a><a class="docs-heading-anchor-permalink" href="#AnalysisResult" title="Permalink"></a></h4><p>Full analysis result wrapper returned by the <code>analyse()</code> pipeline:</p><pre><code class="language-julia hljs">struct AnalysisResult &lt;: AbstractAnalysisResult
+    results::DataFrame           # Complete analysis results
+    bait_protein::String        # Name of bait protein
+    bait_index::Int            # Index in protein list
+    # ... additional fields from full pipeline
+end</code></pre><h4 id="NetworkAnalysisResult"><a class="docs-heading-anchor" href="#NetworkAnalysisResult">NetworkAnalysisResult</a><a id="NetworkAnalysisResult-1"></a><a class="docs-heading-anchor-permalink" href="#NetworkAnalysisResult" title="Permalink"></a></h4><p>Lightweight wrapper for custom DataFrames:</p><pre><code class="language-julia hljs"># Create from any DataFrame with appropriate columns
+df = DataFrame(
+    Protein = [&quot;A&quot;, &quot;B&quot;, &quot;C&quot;],
+    PosteriorProbability = [0.95, 0.85, 0.75],
+    BayesFactor = [100.0, 50.0, 20.0],
+    q_value = [0.001, 0.01, 0.02],
+    mean_log2FC = [3.2, 2.8, 2.1]
+)
+
+ar = NetworkAnalysisResult(df, bait_protein=&quot;MYC&quot;)
+net = build_network(ar, posterior_threshold=0.8)</code></pre><p><strong>Required DataFrame columns</strong> (supports multiple naming conventions):</p><ul><li>Protein names: <code>Protein</code> or <code>protein</code></li><li>Posterior probability: <code>PosteriorProbability</code>, <code>posterior_probability</code>, or <code>posterior_prob</code></li><li>Bayes factor: <code>BayesFactor</code>, <code>bayes_factor</code>, or <code>BF</code></li><li>Q-value (FDR): <code>q_value</code>, <code>QValue</code>, or <code>q</code></li><li>Log2 fold change (optional): <code>mean_log2FC</code> or <code>log2FC</code></li></ul><h3 id="InteractionNetwork"><a class="docs-heading-anchor" href="#InteractionNetwork">InteractionNetwork</a><a id="InteractionNetwork-1"></a><a class="docs-heading-anchor-permalink" href="#InteractionNetwork" title="Permalink"></a></h3><p>Graph representation of protein interactions:</p><pre><code class="language-julia hljs">struct InteractionNetwork
+    graph::SimpleWeightedDiGraph    # Directed weighted graph
+    protein_names::Vector{String}   # Node labels
+    node_attributes::DataFrame      # Node-level data
+    edge_attributes::DataFrame      # Edge-level data
+    bait_protein::Union{String, Nothing}
+    bait_index::Union{Int, Nothing}
+    threshold_used::NamedTuple     # Filtering thresholds
+end</code></pre><p>Access graph properties:</p><pre><code class="language-julia hljs">nv(net.graph)  # Number of nodes
+ne(net.graph)  # Number of edges
+net.protein_names  # Protein names
+net.node_attributes  # DataFrame with posterior_prob, bayes_factor, etc.</code></pre><h3 id="NetworkStatistics"><a class="docs-heading-anchor" href="#NetworkStatistics">NetworkStatistics</a><a id="NetworkStatistics-1"></a><a class="docs-heading-anchor-permalink" href="#NetworkStatistics" title="Permalink"></a></h3><p>Topology metrics:</p><pre><code class="language-julia hljs">struct NetworkStatistics
+    n_nodes::Int
+    n_edges::Int
+    density::Float64              # Edges / possible edges
+    avg_degree::Float64           # Average connections per node
+    avg_weighted_degree::Float64  # Average sum of edge weights
+    avg_clustering::Float64       # Clustering coefficient
+    n_components::Int            # Connected components
+    largest_component_size::Int
+    diameter::Union{Int, Nothing}      # Max shortest path (if connected)
+    avg_path_length::Union{Float64, Nothing}  # Average shortest path
+end</code></pre><h3 id="CentralityMeasures"><a class="docs-heading-anchor" href="#CentralityMeasures">CentralityMeasures</a><a id="CentralityMeasures-1"></a><a class="docs-heading-anchor-permalink" href="#CentralityMeasures" title="Permalink"></a></h3><p>Hub identification scores:</p><pre><code class="language-julia hljs">struct CentralityMeasures
+    protein_names::Vector{String}
+    degree::Vector{Int}              # Number of connections
+    weighted_degree::Vector{Float64} # Sum of edge weights
+    betweenness::Vector{Float64}     # Shortest path centrality
+    closeness::Vector{Float64}       # Inverse average distance
+    eigenvector::Vector{Float64}     # Recursive importance
+    pagerank::Vector{Float64}        # Random walk probability
+end</code></pre><p>Convert to DataFrame for easy inspection:</p><pre><code class="language-julia hljs">df = centrality_dataframe(cm)
+sort(df, :PageRank, rev=true)  # Rank by PageRank</code></pre><h3 id="CommunityResult"><a class="docs-heading-anchor" href="#CommunityResult">CommunityResult</a><a id="CommunityResult-1"></a><a class="docs-heading-anchor-permalink" href="#CommunityResult" title="Permalink"></a></h3><p>Protein complex/module assignments:</p><pre><code class="language-julia hljs">struct CommunityResult
+    protein_names::Vector{String}
+    membership::Vector{Int}      # Community ID for each protein
+    n_communities::Int
+    modularity::Float64         # Quality score (higher is better)
+    community_sizes::Vector{Int}
+end</code></pre><h2 id="Network-Construction"><a class="docs-heading-anchor" href="#Network-Construction">Network Construction</a><a id="Network-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Network-Construction" title="Permalink"></a></h2><h3 id="build_network"><a class="docs-heading-anchor" href="#build_network">build_network</a><a id="build_network-1"></a><a class="docs-heading-anchor-permalink" href="#build_network" title="Permalink"></a></h3><p>Build interaction network from analysis results with statistical filtering:</p><pre><code class="language-julia hljs">net = build_network(ar::AbstractAnalysisResult;
+    posterior_threshold = 0.5,
+    bf_threshold = nothing,
+    q_threshold = 0.05,
+    log2fc_threshold = nothing,
+    include_bait = true,
+    weight_by = :posterior_prob
+)</code></pre><p><strong>Arguments:</strong></p><ul><li><code>posterior_threshold</code>: Minimum posterior probability (default: 0.5)</li><li><code>bf_threshold</code>: Minimum Bayes factor (optional)</li><li><code>q_threshold</code>: Maximum FDR q-value (default: 0.05)</li><li><code>log2fc_threshold</code>: Minimum absolute log2 fold change (optional)</li><li><code>include_bait</code>: Include bait protein as network node (default: true)</li><li><code>weight_by</code>: Edge weight source (<code>:posterior_prob</code>, <code>:bayes_factor</code>, or <code>:log2fc</code>)</li></ul><p><strong>Filtering strategies:</strong></p><pre><code class="language-julia hljs"># High-confidence network (stringent)
+net_high = build_network(ar,
+    posterior_threshold = 0.9,
+    q_threshold = 0.01,
+    bf_threshold = 10.0
+)
+
+# Medium-confidence network (balanced)
+net_medium = build_network(ar,
+    posterior_threshold = 0.8,
+    q_threshold = 0.05
+)
+
+# Exploratory network (permissive)
+net_explore = build_network(ar,
+    posterior_threshold = 0.5,
+    q_threshold = 0.1
+)
+
+# Focus on strong enrichment
+net_enriched = build_network(ar,
+    posterior_threshold = 0.8,
+    log2fc_threshold = 2.0,
+    weight_by = :log2fc
+)</code></pre><h2 id="Network-Statistics"><a class="docs-heading-anchor" href="#Network-Statistics">Network Statistics</a><a id="Network-Statistics-1"></a><a class="docs-heading-anchor-permalink" href="#Network-Statistics" title="Permalink"></a></h2><h3 id="network_statistics"><a class="docs-heading-anchor" href="#network_statistics">network_statistics</a><a id="network_statistics-1"></a><a class="docs-heading-anchor-permalink" href="#network_statistics" title="Permalink"></a></h3><p>Compute comprehensive topology metrics:</p><pre><code class="language-julia hljs">stats = network_statistics(net)
+
+# Basic properties
+stats.n_nodes              # Number of proteins
+stats.n_edges              # Number of interactions
+stats.density              # 0.0 (sparse) to 1.0 (complete)
+
+# Degree statistics
+stats.avg_degree           # Average connections per node
+stats.avg_weighted_degree  # Average sum of edge weights
+
+# Clustering
+stats.avg_clustering       # Local clustering coefficient
+
+# Connectivity
+stats.n_components         # Number of disconnected subgraphs
+stats.largest_component_size
+
+# Path properties (if connected)
+stats.diameter             # Longest shortest path
+stats.avg_path_length      # Average shortest path</code></pre><p><strong>Interpretation:</strong></p><ul><li><strong>Density</strong>: Higher values indicate more interconnected proteins (typical PPI networks: 0.01-0.1)</li><li><strong>Clustering</strong>: Higher values suggest modular organization (protein complexes)</li><li><strong>Components</strong>: Multiple components may indicate distinct functional modules</li><li><strong>Diameter</strong>: Network &quot;width&quot; - smaller values indicate tighter integration</li></ul><h2 id="Centrality-Analysis"><a class="docs-heading-anchor" href="#Centrality-Analysis">Centrality Analysis</a><a id="Centrality-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Centrality-Analysis" title="Permalink"></a></h2><h3 id="centrality_measures"><a class="docs-heading-anchor" href="#centrality_measures">centrality_measures</a><a id="centrality_measures-1"></a><a class="docs-heading-anchor-permalink" href="#centrality_measures" title="Permalink"></a></h3><p>Identify hub proteins using multiple centrality metrics:</p><pre><code class="language-julia hljs">cm = centrality_measures(net)
+
+# Access centrality vectors
+cm.degree          # Simple connection count
+cm.weighted_degree # Weighted connection strength
+cm.betweenness    # Information flow control
+cm.closeness      # Average proximity to all nodes
+cm.eigenvector    # Recursive importance (connected to important nodes)
+cm.pagerank       # Random walk probability (like Google PageRank)</code></pre><p><strong>Centrality measure interpretation:</strong></p><table><tr><th style="text-align: right">Measure</th><th style="text-align: right">Identifies</th><th style="text-align: right">Use Case</th></tr><tr><td style="text-align: right"><strong>Degree</strong></td><td style="text-align: right">Highly connected proteins</td><td style="text-align: right">Core interaction hubs</td></tr><tr><td style="text-align: right"><strong>Weighted Degree</strong></td><td style="text-align: right">Strong binders</td><td style="text-align: right">High-confidence hubs</td></tr><tr><td style="text-align: right"><strong>Betweenness</strong></td><td style="text-align: right">Bridge proteins</td><td style="text-align: right">Inter-complex connectors</td></tr><tr><td style="text-align: right"><strong>Closeness</strong></td><td style="text-align: right">Central proteins</td><td style="text-align: right">Rapid signal propagation</td></tr><tr><td style="text-align: right"><strong>Eigenvector</strong></td><td style="text-align: right">Influential proteins</td><td style="text-align: right">Connected to other hubs</td></tr><tr><td style="text-align: right"><strong>PageRank</strong></td><td style="text-align: right">Important proteins</td><td style="text-align: right">Overall network importance</td></tr></table><h3 id="get*top*hubs"><a class="docs-heading-anchor" href="#get*top*hubs">get<em>top</em>hubs</a><a id="get*top*hubs-1"></a><a class="docs-heading-anchor-permalink" href="#get*top*hubs" title="Permalink"></a></h3><p>Extract top hub proteins by any centrality measure:</p><pre><code class="language-julia hljs"># Top 10 proteins by PageRank
+top_hubs = get_top_hubs(cm, by=:pagerank, n=10)
+
+# Other centrality measures
+top_by_degree = get_top_hubs(cm, by=:degree, n=10)
+top_by_betweenness = get_top_hubs(cm, by=:betweenness, n=10)
+top_by_weighted = get_top_hubs(cm, by=:weighted_degree, n=10)</code></pre><p><strong>Choosing centrality measures:</strong></p><ul><li><strong>General hub identification</strong>: Use PageRank or eigenvector centrality</li><li><strong>Direct interaction partners</strong>: Use degree centrality</li><li><strong>Functional importance</strong>: Use betweenness centrality</li><li><strong>High-confidence hubs</strong>: Use weighted degree with posterior probability weights</li></ul><h3 id="centrality_dataframe"><a class="docs-heading-anchor" href="#centrality_dataframe">centrality_dataframe</a><a id="centrality_dataframe-1"></a><a class="docs-heading-anchor-permalink" href="#centrality_dataframe" title="Permalink"></a></h3><p>Convert centrality measures to DataFrame for easy analysis:</p><pre><code class="language-julia hljs">df = centrality_dataframe(cm)
+# Returns DataFrame with columns: Protein, Degree, WeightedDegree,
+# Betweenness, Closeness, Eigenvector, PageRank
+
+# Rank proteins by multiple criteria
+sorted = sort(df, [:PageRank, :Degree], rev=true)
+
+# Export to file
+CSV.write(&quot;hub_proteins.csv&quot;, df)</code></pre><h2 id="Community-Detection"><a class="docs-heading-anchor" href="#Community-Detection">Community Detection</a><a id="Community-Detection-1"></a><a class="docs-heading-anchor-permalink" href="#Community-Detection" title="Permalink"></a></h2><h3 id="detect_communities"><a class="docs-heading-anchor" href="#detect_communities">detect_communities</a><a id="detect_communities-1"></a><a class="docs-heading-anchor-permalink" href="#detect_communities" title="Permalink"></a></h3><p>Identify protein complexes or functional modules:</p><pre><code class="language-julia hljs">communities = detect_communities(net, algorithm=:louvain)
+
+# Results
+communities.n_communities     # Number of communities found
+communities.modularity       # Quality score (higher is better)
+communities.community_sizes  # Size of each community
+communities.membership       # Community ID for each protein</code></pre><p><strong>Available algorithms:</strong></p><table><tr><th style="text-align: right">Algorithm</th><th style="text-align: right">Description</th><th style="text-align: right">Best For</th></tr><tr><td style="text-align: right"><code>:louvain</code></td><td style="text-align: right">Modularity optimization</td><td style="text-align: right">Hierarchical communities</td></tr><tr><td style="text-align: right"><code>:label_propagation</code></td><td style="text-align: right">Fast local propagation</td><td style="text-align: right">Large networks</td></tr><tr><td style="text-align: right"><code>:greedy_modularity</code></td><td style="text-align: right">Greedy merging</td><td style="text-align: right">Medium networks</td></tr></table><p><strong>Modularity score interpretation:</strong></p><ul><li><strong>&gt; 0.3</strong>: Strong community structure</li><li><strong>0.1 - 0.3</strong>: Moderate community structure</li><li><strong>&lt; 0.1</strong>: Weak or no community structure</li></ul><h3 id="community_dataframe"><a class="docs-heading-anchor" href="#community_dataframe">community_dataframe</a><a id="community_dataframe-1"></a><a class="docs-heading-anchor-permalink" href="#community_dataframe" title="Permalink"></a></h3><p>Convert to DataFrame for analysis:</p><pre><code class="language-julia hljs">df = community_dataframe(communities)
+# Returns DataFrame with columns: Protein, Community
+
+# Analyze community composition
+using DataFrames
+combine(groupby(df, :Community), nrow =&gt; :Size)</code></pre><h3 id="get*community*proteins"><a class="docs-heading-anchor" href="#get*community*proteins">get<em>community</em>proteins</a><a id="get*community*proteins-1"></a><a class="docs-heading-anchor-permalink" href="#get*community*proteins" title="Permalink"></a></h3><p>Extract proteins from specific community:</p><pre><code class="language-julia hljs"># Get all proteins in community 1
+proteins = get_community_proteins(communities, 1)
+
+# Analyze each community
+for i in 1:communities.n_communities
+    proteins = get_community_proteins(communities, i)
+    println(&quot;Community $i has $(length(proteins)) proteins:&quot;)
+    println(join(proteins, &quot;, &quot;))
+end</code></pre><p><strong>Biological interpretation:</strong></p><ul><li>Each community may represent a protein complex or functional module</li><li>Large communities (&gt;20 proteins) may contain multiple sub-complexes</li><li>Small communities (&lt;5 proteins) may be transient interactions</li><li>Compare with known protein complexes (CORUM, ComplexPortal databases)</li></ul><h2 id="Visualization"><a class="docs-heading-anchor" href="#Visualization">Visualization</a><a id="Visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Visualization" title="Permalink"></a></h2><h3 id="plot_network"><a class="docs-heading-anchor" href="#plot_network">plot_network</a><a id="plot_network-1"></a><a class="docs-heading-anchor-permalink" href="#plot_network" title="Permalink"></a></h3><p>Create customizable network visualizations:</p><pre><code class="language-julia hljs">plot_network(net;
+    layout = :spring,
+    node_size = :degree,
+    node_color = :posterior_prob,
+    edge_width = :weight,
+    show_labels = true,
+    highlight_bait = true,
+    figsize = (800, 800)
+)</code></pre><p><strong>Layout algorithms:</strong></p><ul><li><code>:spring</code>: Force-directed layout (good for most networks)</li><li><code>:circular</code>: Nodes arranged in circle (good for small networks)</li><li><code>:shell</code>: Shell layout with multiple levels</li><li><code>:spectral</code>: Spectral decomposition layout</li></ul><p><strong>Node size options:</strong></p><ul><li><code>:degree</code>: Size by number of connections</li><li><code>:posterior_prob</code>: Size by posterior probability</li><li><code>:log2fc</code>: Size by fold change magnitude</li><li><code>:uniform</code>: All nodes same size</li></ul><p><strong>Node color options:</strong></p><ul><li><code>:posterior_prob</code>: Blue (low) to red (high) gradient</li><li><code>:log2fc</code>: Diverging blue (down) to red (up) scale</li><li><code>:community</code>: Different color per community (requires running <code>detect_communities</code> first)</li><li><code>:uniform</code>: Single color (steel blue)</li></ul><p><strong>Edge width options:</strong></p><ul><li><code>:weight</code>: Width proportional to edge weight</li><li><code>:uniform</code>: All edges same width</li></ul><p><strong>Examples:</strong></p><pre><code class="language-julia hljs"># Basic visualization
+plot_network(net)
+
+# Highlight bait and show posterior probabilities
+plot_network(net,
+    layout = :spring,
+    node_color = :posterior_prob,
+    node_size = :degree,
+    highlight_bait = true
+)
+
+# Focus on fold change
+plot_network(net,
+    node_color = :log2fc,
+    node_size = :log2fc,
+    edge_width = :uniform
+)
+
+# Clean circular layout for presentation
+plot_network(net,
+    layout = :circular,
+    node_color = :uniform,
+    show_labels = false,
+    figsize = (1200, 1200)
+)</code></pre><h3 id="save*network*plot"><a class="docs-heading-anchor" href="#save*network*plot">save<em>network</em>plot</a><a id="save*network*plot-1"></a><a class="docs-heading-anchor-permalink" href="#save*network*plot" title="Permalink"></a></h3><p>Save visualizations to file:</p><pre><code class="language-julia hljs">save_network_plot(net, &quot;network.png&quot;)
+
+# Supported formats
+save_network_plot(net, &quot;network.png&quot;, figsize=(1200, 1200))
+save_network_plot(net, &quot;network.pdf&quot;)  # Vector format for publications
+save_network_plot(net, &quot;network.svg&quot;)  # Vector format for web
+
+# With custom styling
+save_network_plot(net, &quot;network.png&quot;,
+    layout = :spring,
+    node_color = :posterior_prob,
+    highlight_bait = true,
+    figsize = (2400, 2400)  # High resolution
+)</code></pre><p><strong>File format recommendations:</strong></p><ul><li><strong>PNG</strong>: Presentations, quick viewing (specify high figsize for print quality)</li><li><strong>PDF</strong>: Publications, LaTeX documents (vector graphics, scalable)</li><li><strong>SVG</strong>: Web, interactive applications (vector graphics, editable)</li></ul><h2 id="Export"><a class="docs-heading-anchor" href="#Export">Export</a><a id="Export-1"></a><a class="docs-heading-anchor-permalink" href="#Export" title="Permalink"></a></h2><h3 id="export_graphml"><a class="docs-heading-anchor" href="#export_graphml">export_graphml</a><a id="export_graphml-1"></a><a class="docs-heading-anchor-permalink" href="#export_graphml" title="Permalink"></a></h3><p>Export to GraphML format for Cytoscape, Gephi, and other network tools:</p><pre><code class="language-julia hljs">export_graphml(net, &quot;network.graphml&quot;)</code></pre><p>GraphML preserves all node and edge attributes:</p><ul><li>Node attributes: protein name, posterior probability, Bayes factor, q-value, log2FC, bait status</li><li>Edge attributes: interaction weight</li></ul><p><strong>Using in Cytoscape:</strong></p><ol><li>Open Cytoscape</li><li>File → Import → Network from File</li><li>Select the .graphml file</li><li>Attributes are imported as node/edge columns</li><li>Use Style panel to map attributes to visual properties</li></ol><p><strong>Using in Gephi:</strong></p><ol><li>Open Gephi</li><li>File → Open → Select .graphml file</li><li>Import as &quot;Directed graph&quot;</li><li>Attributes available in Data Laboratory</li></ol><h3 id="export_edgelist"><a class="docs-heading-anchor" href="#export_edgelist">export_edgelist</a><a id="export_edgelist-1"></a><a class="docs-heading-anchor-permalink" href="#export_edgelist" title="Permalink"></a></h3><p>Export edge list as CSV:</p><pre><code class="language-julia hljs">export_edgelist(net, &quot;edges.csv&quot;)
+
+# Without additional attributes
+export_edgelist(net, &quot;edges.csv&quot;, include_attributes=false)</code></pre><p>Creates CSV with columns:</p><ul><li><code>source</code>: Source protein name</li><li><code>target</code>: Target protein name</li><li><code>weight</code>: Edge weight</li><li>Additional edge attributes (if <code>include_attributes=true</code>)</li></ul><p><strong>Use cases:</strong></p><ul><li>Import into R/Python for custom analysis</li><li>Network construction in other tools</li><li>Simple tabular view of interactions</li></ul><h3 id="export*node*attributes"><a class="docs-heading-anchor" href="#export*node*attributes">export<em>node</em>attributes</a><a id="export*node*attributes-1"></a><a class="docs-heading-anchor-permalink" href="#export*node*attributes" title="Permalink"></a></h3><p>Export node attributes as CSV:</p><pre><code class="language-julia hljs">export_node_attributes(net, &quot;nodes.csv&quot;)</code></pre><p>Creates CSV with columns:</p><ul><li><code>protein</code>: Protein name</li><li><code>node_id</code>: Node index</li><li><code>posterior_prob</code>: Posterior probability</li><li><code>bayes_factor</code>: Bayes factor</li><li><code>q_value</code>: FDR q-value</li><li><code>mean_log2fc</code>: Mean log2 fold change (if available)</li><li><code>is_bait</code>: Boolean indicating bait protein</li></ul><p><strong>Use cases:</strong></p><ul><li>Statistical analysis in R/Python</li><li>Annotation with external databases</li><li>Custom plotting</li></ul><h3 id="export*network*bundle"><a class="docs-heading-anchor" href="#export*network*bundle">export<em>network</em>bundle</a><a id="export*network*bundle-1"></a><a class="docs-heading-anchor-permalink" href="#export*network*bundle" title="Permalink"></a></h3><p>Export all formats at once:</p><pre><code class="language-julia hljs">export_network_bundle(net, &quot;results/mynetwork&quot;)
+# Creates:
+#   results/mynetwork.graphml
+#   results/mynetwork_edges.csv
+#   results/mynetwork_nodes.csv</code></pre><h2 id="Complete-Workflow-Example"><a class="docs-heading-anchor" href="#Complete-Workflow-Example">Complete Workflow Example</a><a id="Complete-Workflow-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-Workflow-Example" title="Permalink"></a></h2><p>Here&#39;s a complete workflow from data loading to network export:</p><pre><code class="language-julia hljs">using BayesInteractomics
+using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+using DataFrames, CSV
+
+# 1. Load and analyze data
+println(&quot;Loading data...&quot;)
+data = load_data(
+    [&quot;experiment.xlsx&quot;],
+    Dict(1 =&gt; [5,6,7]),  # sample columns
+    Dict(1 =&gt; [2,3,4])   # control columns
+)
+
+println(&quot;Running Bayesian analysis...&quot;)
+results = analyse(data, &quot;copula_H0.xlsx&quot;,
+    refID = 1,
+    n_controls = 3,
+    n_samples = 3
+)
+
+# 2. Wrap results
+ar = AnalysisResult(results, bait_protein=&quot;MYC&quot;, bait_index=1)
+
+# 3. Build high-confidence network
+println(&quot;Building network...&quot;)
+net = build_network(ar,
+    posterior_threshold = 0.8,
+    q_threshold = 0.01,
+    weight_by = :posterior_prob
+)
+
+# 4. Analyze network topology
+println(&quot;\n=== Network Statistics ===&quot;)
+stats = network_statistics(net)
+println(&quot;Nodes: $(stats.n_nodes)&quot;)
+println(&quot;Edges: $(stats.n_edges)&quot;)
+println(&quot;Density: $(round(stats.density, digits=4))&quot;)
+println(&quot;Avg clustering: $(round(stats.avg_clustering, digits=4))&quot;)
+println(&quot;Components: $(stats.n_components)&quot;)
+
+# 5. Identify hub proteins
+println(&quot;\n=== Top Hub Proteins ===&quot;)
+cm = centrality_measures(net)
+top10 = get_top_hubs(cm, by=:pagerank, n=10)
+println(top10)
+
+# Save centrality analysis
+CSV.write(&quot;hub_analysis.csv&quot;, centrality_dataframe(cm))
+
+# 6. Detect protein complexes
+println(&quot;\n=== Community Detection ===&quot;)
+communities = detect_communities(net, algorithm=:louvain)
+println(&quot;Found $(communities.n_communities) communities&quot;)
+println(&quot;Modularity: $(round(communities.modularity, digits=4))&quot;)
+println(&quot;Sizes: $(communities.community_sizes)&quot;)
+
+# Save community assignments
+CSV.write(&quot;communities.csv&quot;, community_dataframe(communities))
+
+# Print each community
+for i in 1:communities.n_communities
+    proteins = get_community_proteins(communities, i)
+    println(&quot;\nCommunity $i ($(length(proteins)) proteins):&quot;)
+    println(&quot;  &quot;, join(proteins[1:min(5, length(proteins))], &quot;, &quot;),
+            length(proteins) &gt; 5 ? &quot;...&quot; : &quot;&quot;)
+end
+
+# 7. Visualize
+println(&quot;\n=== Creating Visualizations ===&quot;)
+save_network_plot(net, &quot;network_overview.png&quot;,
+    layout = :spring,
+    node_color = :posterior_prob,
+    node_size = :degree,
+    highlight_bait = true,
+    figsize = (1200, 1200)
+)
+
+save_network_plot(net, &quot;network_publication.pdf&quot;,
+    layout = :spring,
+    show_labels = true,
+    figsize = (800, 800)
+)
+
+# 8. Export for external tools
+println(&quot;\n=== Exporting Results ===&quot;)
+export_network_bundle(net, &quot;results/myc_network&quot;)
+
+println(&quot;\n✓ Analysis complete!&quot;)
+println(&quot;  Network plots: network_overview.png, network_publication.pdf&quot;)
+println(&quot;  Hub analysis: hub_analysis.csv&quot;)
+println(&quot;  Communities: communities.csv&quot;)
+println(&quot;  Export bundle: results/myc_network.*&quot;)</code></pre><h2 id="Advanced-Topics"><a class="docs-heading-anchor" href="#Advanced-Topics">Advanced Topics</a><a id="Advanced-Topics-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Topics" title="Permalink"></a></h2><h3 id="Custom-Network-Construction"><a class="docs-heading-anchor" href="#Custom-Network-Construction">Custom Network Construction</a><a id="Custom-Network-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Network-Construction" title="Permalink"></a></h3><p>For specialized analyses, you can build networks directly from any DataFrame:</p><pre><code class="language-julia hljs"># Load your own interaction scores
+df = CSV.read(&quot;my_interactions.csv&quot;, DataFrame)
+
+# Must have these columns (or variants):
+# - Protein (or protein)
+# - PosteriorProbability (or posterior_probability, posterior_prob)
+# - BayesFactor (or bayes_factor, BF)
+# - q_value (or QValue, q)
+
+# Create analysis result wrapper
+ar = NetworkAnalysisResult(df, bait_protein=&quot;MYC&quot;)
+
+# Build network
+net = build_network(ar, posterior_threshold=0.8)</code></pre><h3 id="Combining-Multiple-Networks"><a class="docs-heading-anchor" href="#Combining-Multiple-Networks">Combining Multiple Networks</a><a id="Combining-Multiple-Networks-1"></a><a class="docs-heading-anchor-permalink" href="#Combining-Multiple-Networks" title="Permalink"></a></h3><p>Compare networks across conditions:</p><pre><code class="language-julia hljs"># Build networks for different conditions
+net_control = build_network(results_control, posterior_threshold=0.8)
+net_treatment = build_network(results_treatment, posterior_threshold=0.8)
+
+# Compare statistics
+stats_control = network_statistics(net_control)
+stats_treatment = network_statistics(net_treatment)
+
+println(&quot;Control: $(stats_control.n_edges) edges&quot;)
+println(&quot;Treatment: $(stats_treatment.n_edges) edges&quot;)
+
+# Identify condition-specific hubs
+cm_control = centrality_measures(net_control)
+cm_treatment = centrality_measures(net_treatment)
+
+hubs_control = get_top_hubs(cm_control, n=20)
+hubs_treatment = get_top_hubs(cm_treatment, n=20)
+
+# Find condition-specific hubs
+control_specific = setdiff(hubs_control.Protein, hubs_treatment.Protein)
+treatment_specific = setdiff(hubs_treatment.Protein, hubs_control.Protein)</code></pre><h3 id="Subnetwork-Extraction"><a class="docs-heading-anchor" href="#Subnetwork-Extraction">Subnetwork Extraction</a><a id="Subnetwork-Extraction-1"></a><a class="docs-heading-anchor-permalink" href="#Subnetwork-Extraction" title="Permalink"></a></h3><p>Extract subnetworks for focused analysis:</p><pre><code class="language-julia hljs"># Get proteins in largest community
+communities = detect_communities(net)
+largest_comm = argmax(communities.community_sizes)
+comm_proteins = get_community_proteins(communities, largest_comm)
+
+# Filter results DataFrame
+subset_results = filter(row -&gt; row.Protein in comm_proteins, ar.results)
+
+# Build subnetwork
+ar_subset = NetworkAnalysisResult(subset_results, bait_protein=ar.bait_protein)
+subnet = build_network(ar_subset, posterior_threshold=0.5)
+
+# Analyze subnetwork
+plot_network(subnet, layout=:circular)</code></pre><h3 id="Integration-with-External-Data"><a class="docs-heading-anchor" href="#Integration-with-External-Data">Integration with External Data</a><a id="Integration-with-External-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Integration-with-External-Data" title="Permalink"></a></h3><p>Enrich network with external annotations:</p><pre><code class="language-julia hljs"># Load GO terms, pathways, etc.
+annotations = CSV.read(&quot;protein_annotations.csv&quot;, DataFrame)
+
+# Join with node attributes
+enriched_nodes = leftjoin(net.node_attributes, annotations, on=:protein)
+
+# Analyze enrichment
+for comm_id in 1:communities.n_communities
+    proteins = get_community_proteins(communities, comm_id)
+    comm_annotations = filter(row -&gt; row.protein in proteins, enriched_nodes)
+
+    # Count GO terms, pathways, etc.
+    println(&quot;Community $comm_id enriched terms:&quot;)
+    println(combine(groupby(comm_annotations, :GO_term), nrow =&gt; :count))
+end</code></pre><h2 id="Best-Practices"><a class="docs-heading-anchor" href="#Best-Practices">Best Practices</a><a id="Best-Practices-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices" title="Permalink"></a></h2><h3 id="Threshold-Selection"><a class="docs-heading-anchor" href="#Threshold-Selection">Threshold Selection</a><a id="Threshold-Selection-1"></a><a class="docs-heading-anchor-permalink" href="#Threshold-Selection" title="Permalink"></a></h3><p><strong>Stringent (high confidence):</strong></p><pre><code class="language-julia hljs">net = build_network(ar,
+    posterior_threshold = 0.9,
+    q_threshold = 0.01,
+    bf_threshold = 10.0
+)</code></pre><p>Use for: Core interactome, publication figures, high-confidence candidates</p><p><strong>Moderate (balanced):</strong></p><pre><code class="language-julia hljs">net = build_network(ar,
+    posterior_threshold = 0.8,
+    q_threshold = 0.05
+)</code></pre><p>Use for: General analysis, community detection, hub identification</p><p><strong>Permissive (exploratory):</strong></p><pre><code class="language-julia hljs">net = build_network(ar,
+    posterior_threshold = 0.5,
+    q_threshold = 0.1
+)</code></pre><p>Use for: Discovery, pathway analysis, network topology studies</p><h3 id="Visualization-Guidelines"><a class="docs-heading-anchor" href="#Visualization-Guidelines">Visualization Guidelines</a><a id="Visualization-Guidelines-1"></a><a class="docs-heading-anchor-permalink" href="#Visualization-Guidelines" title="Permalink"></a></h3><ol><li><p><strong>For presentations:</strong></p><ul><li>Use high-resolution PNG (figsize ≥ 1200×1200)</li><li>Highlight bait protein</li><li>Color by posterior probability</li><li>Size by degree centrality</li></ul></li><li><p><strong>For publications:</strong></p><ul><li>Export as PDF or SVG (vector graphics)</li><li>Consider circular layout for clarity</li><li>Use uniform or subtle colors</li><li>Show labels for key proteins only</li></ul></li><li><p><strong>For exploration:</strong></p><ul><li>Use spring layout for natural clustering</li><li>Color by communities or functional annotations</li><li>Size by relevance metric (degree, PageRank)</li><li>Export to Cytoscape for interactive exploration</li></ul></li></ol><h3 id="Performance-Considerations"><a class="docs-heading-anchor" href="#Performance-Considerations">Performance Considerations</a><a id="Performance-Considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Considerations" title="Permalink"></a></h3><ul><li>Large networks (&gt;500 nodes): Use <code>layout=:circular</code> instead of <code>:spring</code> for faster rendering</li><li>Many communities: Use <code>:louvain</code> algorithm (faster than <code>:greedy_modularity</code>)</li><li>Repeated analysis: Cache <code>build_network</code> results to avoid recomputation</li><li>Export large networks to Cytoscape for better performance</li></ul><h2 id="Troubleshooting"><a class="docs-heading-anchor" href="#Troubleshooting">Troubleshooting</a><a id="Troubleshooting-1"></a><a class="docs-heading-anchor-permalink" href="#Troubleshooting" title="Permalink"></a></h2><h3 id="&quot;Network-extension-not-loaded&quot;-error"><a class="docs-heading-anchor" href="#&quot;Network-extension-not-loaded&quot;-error">&quot;Network extension not loaded&quot; error</a><a id="&quot;Network-extension-not-loaded&quot;-error-1"></a><a class="docs-heading-anchor-permalink" href="#&quot;Network-extension-not-loaded&quot;-error" title="Permalink"></a></h3><p><strong>Problem:</strong> Network functions not available</p><p><strong>Solution:</strong></p><pre><code class="language-julia hljs">using Graphs, SimpleWeightedGraphs, GraphPlot, Compose</code></pre><h3 id="Empty-network-warning"><a class="docs-heading-anchor" href="#Empty-network-warning">Empty network warning</a><a id="Empty-network-warning-1"></a><a class="docs-heading-anchor-permalink" href="#Empty-network-warning" title="Permalink"></a></h3><p><strong>Problem:</strong> No interactions pass filtering criteria</p><p><strong>Solution:</strong> Relax thresholds</p><pre><code class="language-julia hljs">net = build_network(ar, posterior_threshold=0.5, q_threshold=0.1)</code></pre><h3 id="Disconnected-network-(diameter-nothing)"><a class="docs-heading-anchor" href="#Disconnected-network-(diameter-nothing)">Disconnected network (diameter = nothing)</a><a id="Disconnected-network-(diameter-nothing)-1"></a><a class="docs-heading-anchor-permalink" href="#Disconnected-network-(diameter-nothing)" title="Permalink"></a></h3><p><strong>Problem:</strong> Network has multiple components</p><p><strong>Interpretation:</strong> Normal for interaction networks; indicates distinct functional modules</p><p><strong>Analysis:</strong></p><pre><code class="language-julia hljs">stats = network_statistics(net)
+println(&quot;Components: $(stats.n_components)&quot;)
+println(&quot;Largest component: $(stats.largest_component_size)&quot;)</code></pre><h3 id="Community-detection-yields-single-community"><a class="docs-heading-anchor" href="#Community-detection-yields-single-community">Community detection yields single community</a><a id="Community-detection-yields-single-community-1"></a><a class="docs-heading-anchor-permalink" href="#Community-detection-yields-single-community" title="Permalink"></a></h3><p><strong>Problem:</strong> Low modularity, all proteins in one community</p><p><strong>Causes:</strong></p><ul><li>Star topology (all proteins connected to bait)</li><li>Too few edges</li><li>Very dense network</li></ul><p><strong>Solutions:</strong></p><ul><li>Try different algorithm</li><li>Relax filtering thresholds to include more edges</li><li>Consider hierarchical clustering for star networks</li></ul><h2 id="References"><a class="docs-heading-anchor" href="#References">References</a><a id="References-1"></a><a class="docs-heading-anchor-permalink" href="#References" title="Permalink"></a></h2><p>For more information on the statistical methods:</p><ul><li>See <a href="../model_evaluation/">Model Evaluation</a> for Bayesian analysis details</li><li>See <a href="../examples/">Examples</a> for complete workflows</li><li>See <a href="../api/">API Reference</a> for function signatures</li></ul><h3 id="Network-Analysis-Literature"><a class="docs-heading-anchor" href="#Network-Analysis-Literature">Network Analysis Literature</a><a id="Network-Analysis-Literature-1"></a><a class="docs-heading-anchor-permalink" href="#Network-Analysis-Literature" title="Permalink"></a></h3><ul><li><strong>Modularity</strong>: Newman, M. E. J. (2006). Modularity and community structure in networks. PNAS, 103(23), 8577-8582.</li><li><strong>Centrality measures</strong>: Freeman, L. C. (1977). A set of measures of centrality based on betweenness. Sociometry, 40(1), 35-41.</li><li><strong>PageRank</strong>: Brin, S., &amp; Page, L. (1998). The anatomy of a large-scale hypertextual web search engine. Computer Networks, 30(1-7), 107-117.</li><li><strong>Community detection</strong>: Blondel, V. D., et al. (2008). Fast unfolding of communities in large networks. Journal of Statistical Mechanics, 2008(10), P10008.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../reports/">« Reports</a><a class="docs-footer-nextpage" href="../examples/">Examples »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Saturday 28 February 2026 08:35">Saturday 28 February 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
