@@ -172,7 +172,6 @@ Combined Bayes factors from multiple models are more reliable than any individua
 betabernoulli
 BayesFactorHBM
 BayesFactorRegression
-calculate_bayes_factor
 probability_of_direction
 pd_to_p_value
 compute_waic

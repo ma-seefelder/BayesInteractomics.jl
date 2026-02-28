@@ -510,11 +510,3 @@ for bait in baits
     println("  Found $(nrow(filter(r -> r.Posterior_Probability > 0.95, results))) interactions")
 end
 ```
-
-## Further Resources
-
-- See `examples/hap40_interactome.jl` for the complete HAP40 analysis script
-- See `examples/meta_analysis_workflow.jl` for the full HTT meta-analysis with multiple imputation
-- Check the [Tutorial](tutorial.md) for step-by-step guidance
-- Refer to [Mathematical Background](mathematical_background.md) for details on the statistical models
-- Browse [API Reference](analysis.md) for function documentation

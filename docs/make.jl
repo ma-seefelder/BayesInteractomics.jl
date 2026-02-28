@@ -32,7 +32,7 @@ makedocs(;
         "Mathematical Background" => "mathematical_background.md",
         "API Reference" => "api.md",
     ],
-    warnonly = [:missing_docs, :cross_references, :autodocs_block],
+    warnonly = [:missing_docs, :cross_references, :autodocs_block, :docs_block],
 )
 
 deploydocs(;

@@ -123,7 +123,7 @@ public getMatchedPositions, getExperimentPositions, getProtocolPositions
 # Results and caching
 public getProteins, getBayesFactors, getPosteriorProbabilities, getQValues
 public getMeanLog2FC, getBaitProtein, getPosteriorProbs
-public compute_config_hash, compute_data_hash, check_cache
+public compute_config_hash, compute_data_hash
 public compute_betabernoulli_hash, compute_hbm_regression_hash
 public check_betabernoulli_cache, check_hbm_regression_cache
 public get_betabernoulli_cache_filepath, get_hbm_regression_cache_filepath
@@ -135,11 +135,10 @@ public getPosterior, getbfHBM, getbfRegression, getHBMstats, getregressionstats,
 public combined_BF_latent_class, combined_BF_bma
 
 # Model Evaluation
-public probability_of_direction, pd_to_p_value, log2FCStatistics, RegressionStatistics
+public log2FCStatistics, RegressionStatistics
 
 # Model visualization
-public plot_inference_results, plot_log2fc, plot_regression
-public plot_bayesrange, write_txt
+public write_txt
 
 # Differential analysis accessors
 public getDifferentialBayesFactors, getDifferentialPosteriors
@@ -209,6 +208,15 @@ export export_graphml, export_edgelist, export_node_attributes
 export centrality_dataframe, community_dataframe, get_top_hubs, edge_source_summary
 export NetworkConfig, NetworkPipelineResult
 export run_network_analysis, generate_network_report
+
+# Documentation-required exports (symbols referenced in topic-page @docs blocks)
+export analyse, check_cache
+export betabernoulli
+export probability_of_direction, pd_to_p_value
+export combined_BF, fit_copula, compare_copulas, posterior_probability_from_bayes_factor
+export scale_location_plot
+export plot_analysis, plot_results, evidence_plot, rank_rank_plot, volcano_plot
+export plot_inference_results, plot_log2fc, plot_regression, plot_bayesrange
 
 # Prey-prey network enrichment exports
 export PPIEnrichmentConfig
