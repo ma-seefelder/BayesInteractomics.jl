@@ -32,6 +32,11 @@ jobs:
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Instantiate the examples project
+        # The metalearner tests spawn `julia --project=examples` subprocesses to
+        # load a self-contained MLJ.Stack (needs EvoTrees / DecisionTree /
+        # NearestNeighborModels, which live in examples/, not the test target).
+        run: julia --project=examples -e 'using Pkg; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@v1
         env:
           JULIA_NUM_THREADS: '4'

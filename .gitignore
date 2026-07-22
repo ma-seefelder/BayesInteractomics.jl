@@ -1,6 +1,4 @@
 
-test/dummy_data/dummy_data.xlsx
-test/dummy_data/dummy_data.csv
 test/differential/*.png
 test/differential/*.svg
 test/reports/*.png
@@ -10,6 +8,8 @@ src/analysis_deltaHAP40.jl
 src/analysis_HAP40-4K.jl
 src/test.jl
 *.xlsx
+# committed test fixture (overrides the global *.xlsx ignore):
+!test/dummy_data/dummy_data.xlsx
 encodings/interresidue_distance.csv
 encodings/9606.protein.network.embeddings.v12.0.h5
 encodings/generated_training_dataset.h5
