@@ -11,6 +11,13 @@ flush(stdout)
 
 basepath = "C:/Users/Manuel/Desktop/HAP40_interactome_enrichment/wtHAP40"
 
+# Resolve the shipped model file via the metalearner extension (dev repo tree OR
+# the lazily-downloaded `bayesinteractomics_models` artifact). Falls back to
+# `nothing` (→ CONFIG default resolution) when the extension is not loaded.
+_mlext = Base.get_extension(BayesInteractomics, :BayesInteractomicsMetalearnerExt)
+metalearner_path_resolved = _mlext === nothing ? nothing :
+    _mlext.resolve_metalearner_path("metalearners/HistGradientBoosting_tune.jld2")
+
 println("Creating config...")
 flush(stdout)
 
@@ -36,7 +43,7 @@ wtHAP40_config = BayesInteractomics.CONFIG(
     plotbayesrange = false,
     verbose = true,  # Enable verbose output
     vc_legend_pos = :topleft,
-    metalearner_path = "metalearners/HistGradientBoosting_tune.jld2",
+    metalearner_path = metalearner_path_resolved,
     run_em_diagnostics = true,
     em_n_restarts = 3  # Reduce restarts for faster testing
 )

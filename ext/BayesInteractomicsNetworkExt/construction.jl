@@ -13,7 +13,7 @@ across both types.
 - `ar::AbstractAnalysisResult`: Analysis results (AnalysisResult or NetworkAnalysisResult)
 - `posterior_threshold::Float64=0.5`: Minimum posterior probability for inclusion
 - `bf_threshold::Union{Float64, Nothing}=nothing`: Minimum Bayes factor for inclusion
-- `q_threshold::Float64=0.05`: Maximum q-value (FDR) for inclusion
+- `bfdr_threshold::Float64=0.05`: Maximum q-value (FDR) for inclusion
 - `log2fc_threshold::Union{Float64, Nothing}=nothing`: Minimum log2 fold change for inclusion
 - `include_bait::Bool=true`: Whether to include bait protein as a node
 - `weight_by::Symbol=:posterior_prob`: Edge weight source (:posterior_prob, :bayes_factor, :log2fc)
@@ -29,7 +29,7 @@ using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
 # With full AnalysisResult
 results = analyse(data, "H0.xlsx", refID=1)
 ar = AnalysisResult(results, ..., bait_protein="MYC", bait_index=1)
-net = build_network(ar, posterior_threshold=0.8, q_threshold=0.01)
+net = build_network(ar, posterior_threshold=0.8, bfdr_threshold=0.01)
 
 # Or with NetworkAnalysisResult
 ar = NetworkAnalysisResult(my_df, bait_protein="MYC")
@@ -40,7 +40,7 @@ function BayesInteractomics.build_network(
     ar::BayesInteractomics.AbstractAnalysisResult;
     posterior_threshold::Float64 = 0.5,
     bf_threshold::Union{Float64, Nothing} = nothing,
-    q_threshold::Float64 = 0.05,
+    bfdr_threshold::Float64 = 0.05,
     log2fc_threshold::Union{Float64, Nothing} = nothing,
     include_bait::Bool = true,
     weight_by::Symbol = :posterior_prob
@@ -74,12 +74,13 @@ function BayesInteractomics.build_network(
         end
     end
 
-    # Q-value filter (support multiple naming conventions)
+    # BFDR filter (support multiple naming conventions, including legacy q_value)
     # Note: Missing values are treated as not passing the filter
-    if hasproperty(df, :q_value) || hasproperty(df, :QValue) || hasproperty(df, :q)
-        q_col = hasproperty(df, :q_value) ? :q_value :
-                hasproperty(df, :QValue) ? :QValue : :q
-        mask .&= coalesce.(df[!, q_col] .<= q_threshold, false)
+    if hasproperty(df, :BFDR) || hasproperty(df, :q_value) || hasproperty(df, :QValue) || hasproperty(df, :q)
+        bfdr_col = hasproperty(df, :BFDR) ? :BFDR :
+                   hasproperty(df, :q_value) ? :q_value :
+                   hasproperty(df, :QValue) ? :QValue : :q
+        mask .&= coalesce.(df[!, bfdr_col] .<= bfdr_threshold, false)
     end
 
     # Log2FC filter (support multiple naming conventions)
@@ -106,7 +107,7 @@ function BayesInteractomics.build_network(
             ar.bait_protein,
             ar.bait_index,
             (posterior_threshold=posterior_threshold, bf_threshold=bf_threshold,
-             q_threshold=q_threshold, log2fc_threshold=log2fc_threshold)
+             bfdr_threshold=bfdr_threshold, log2fc_threshold=log2fc_threshold)
         )
     end
 
@@ -153,7 +154,8 @@ function BayesInteractomics.build_network(
         node_attrs[!, :bayes_factor] = vcat([missing],
             hasproperty(significant, :BayesFactor) ? significant.BayesFactor :
             hasproperty(significant, :bayes_factor) ? significant.bayes_factor : significant.BF)
-        node_attrs[!, :q_value] = vcat([missing],
+        node_attrs[!, :BFDR] = vcat([missing],
+            hasproperty(significant, :BFDR) ? significant.BFDR :
             hasproperty(significant, :q_value) ? significant.q_value :
             hasproperty(significant, :QValue) ? significant.QValue : significant.q)
         if hasproperty(significant, :mean_log2FC) || hasproperty(significant, :log2FC)
@@ -169,8 +171,9 @@ function BayesInteractomics.build_network(
         node_attrs[!, :bayes_factor] = hasproperty(significant, :BayesFactor) ?
             significant.BayesFactor :
             hasproperty(significant, :bayes_factor) ? significant.bayes_factor : significant.BF
-        node_attrs[!, :q_value] = hasproperty(significant, :q_value) ?
-            significant.q_value :
+        node_attrs[!, :BFDR] = hasproperty(significant, :BFDR) ?
+            significant.BFDR :
+            hasproperty(significant, :q_value) ? significant.q_value :
             hasproperty(significant, :QValue) ? significant.QValue : significant.q
         if hasproperty(significant, :mean_log2FC) || hasproperty(significant, :log2FC)
             fc_col = hasproperty(significant, :mean_log2FC) ? :mean_log2FC : :log2FC
@@ -214,7 +217,7 @@ function BayesInteractomics.build_network(
     thresholds = (
         posterior_threshold = posterior_threshold,
         bf_threshold = bf_threshold,
-        q_threshold = q_threshold,
+        bfdr_threshold = bfdr_threshold,
         log2fc_threshold = log2fc_threshold
     )
 

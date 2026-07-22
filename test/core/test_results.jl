@@ -68,6 +68,7 @@ using Distributions
             joint_H0,
             joint_H1,
             nothing,  # latent_class_result
+            nothing,  # bma_result
             :copula,  # combination_method
             nothing,  # em_diagnostics
             nothing,  # em_diagnostics_summary
@@ -77,7 +78,10 @@ using Distributions
             package_version,
             nothing,  # bait_protein
             nothing,  # bait_index
-            nothing   # sensitivity
+            nothing,  # sensitivity
+            nothing,  # diagnostics
+            nothing,  # input_qc
+            :extension_not_loaded  # metalearner_status
         )
     end
 
@@ -146,8 +150,8 @@ using Distributions
         @test length(probs) == 5
         @test all(0 .<= probs .<= 1)
 
-        q_vals = BayesInteractomics.getQValues(result)
-        @test length(q_vals) == 5
+        bfdr_vals = BayesInteractomics.getBFDR(result)
+        @test length(bfdr_vals) == 5
 
         # Test new accessors
         log2fc = BayesInteractomics.getMeanLog2FC(result)
@@ -191,6 +195,7 @@ using Distributions
             mock.joint_H0,
             mock.joint_H1,
             nothing,      # latent_class_result
+            nothing,      # bma_result
             :copula,      # combination_method
             nothing,      # em_diagnostics
             nothing,      # em_diagnostics_summary
@@ -200,7 +205,10 @@ using Distributions
             "0.1.0",
             "MYC",
             1,
-            nothing       # sensitivity
+            nothing,      # sensitivity
+            nothing,      # diagnostics
+            nothing,      # input_qc
+            :extension_not_loaded  # metalearner_status
         )
 
         @test result_with_bait.bait_protein == "MYC"
@@ -357,7 +365,8 @@ using Distributions
                 Dict(1 => sample_protocol),
                 Dict(1 => control_protocol),
                 1, no_experiments, 3, 3,
-                protocol_pos, exp_pos, matched_pos
+                protocol_pos, exp_pos, matched_pos,
+                trues(length(protein_ids))
             )
         end
 
@@ -404,7 +413,8 @@ using Distributions
                 Dict(1 => sample_protocol),
                 Dict(1 => control_protocol),
                 1, no_experiments, 3, 3,
-                protocol_pos, exp_pos, matched_pos
+                protocol_pos, exp_pos, matched_pos,
+                trues(length(protein_ids))
             )
 
             # Test CACHE_MISS_NO_FILE
@@ -440,7 +450,8 @@ using Distributions
                 Dict(1 => BayesInteractomics.Protocol(1, protein_ids, Dict(1 => Matrix{Union{Missing,Float64}}(randn(3, 3))))),
                 Dict(1 => BayesInteractomics.Protocol(1, protein_ids, Dict(1 => Matrix{Union{Missing,Float64}}(randn(3, 3))))),
                 1, no_experiments, 3, 3,
-                protocol_pos, exp_pos, matched_pos
+                protocol_pos, exp_pos, matched_pos,
+                trues(length(protein_ids))
             )
             status, cached = BayesInteractomics.check_cache(cache_file, config, data_changed)
             @test status == BayesInteractomics.CACHE_MISS_DATA

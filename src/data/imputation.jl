@@ -34,8 +34,8 @@ Compute a mixture model for each parameter across multiple imputed log2FC poster
 """
 function compute_mixture(posterior::Vector{BayesResult})
     ninferences = length(posterior)
-    nparameters = length(posterior[1].posteriorHBM.posteriors[:μ_control])
-    posterior = [posterior[i].posteriorHBM for i ∈ 1:ninferences]
+    nparameters = length(posterior[1].hbm_result.posterior.posteriors[:μ_control])
+    posterior = [posterior[i].hbm_result.posterior for i ∈ 1:ninferences]
     # compute log2FC
     log2fc_values = [log2FC.(posterior[i].posteriors[:μ_sample], posterior[i].posteriors[:μ_control]) for i ∈ 1:ninferences]
     # Preallocate result
@@ -90,10 +90,23 @@ function compute_statistics(
 
     HBM_stats = log2FCStatistics(mixture, α = α)
 
-    if !isnothing(results[1].posteriorRegression)
-        regression_posterior = miconvertRegression(results)
-        regression_stats = RegressionStatistics(regression_posterior)
-        bfRegression, _, _ = BayesFactorRegression(regression_posterior, results[1].priorRegression)
+    if !isnothing(results[1].regression_result)
+        pooled_posterior_dict = miconvertRegression(results)
+        prior_ir = results[1].regression_result.prior
+
+        # Wrap pooled dict as InferenceResult so existing BayesFactorRegression/RegressionStatistics work
+        pooled_ir = RxInfer.InferenceResult(pooled_posterior_dict, nothing, nothing, nothing, nothing)
+
+        # Determine single vs multi protocol from the first result's type
+        reg = results[1].regression_result
+        if reg isa RegressionResultMultipleProtocols || reg isa RobustRegressionResultMultipleProtocols
+            wrapped = RegressionResultMultipleProtocols(pooled_ir, prior_ir)
+        else
+            wrapped = RegressionResultSingleProtocol(pooled_ir, prior_ir)
+        end
+
+        regression_stats = RegressionStatistics(wrapped)
+        bfRegression, _, _ = BayesFactorRegression(wrapped)
     else
         bfRegression = nothing
         regression_stats = nothing
@@ -150,7 +163,7 @@ function evaluate_imputed_fc_posteriors(
     initiate_folders()::Nothing
 
     # compute prior log2FC
-    prior = first_result.priorHBM
+    prior = first_result.hbm_result.prior
     priorlog2FC = log2FC.(prior.posteriors[:μ_sample], prior.posteriors[:μ_control])
 
     #########################################
@@ -162,7 +175,7 @@ function evaluate_imputed_fc_posteriors(
     
     # plot
     plotlog2fc && plot_log2fc(
-        log2fc_mixt, first_result.priorHBM, 
+        log2fc_mixt, first_result.hbm_result.prior,
         threshold = threshold, file = "data/log2FC/$(protein_name)_log2fc.png"
         )
 
@@ -182,12 +195,25 @@ function evaluate_imputed_fc_posteriors(
     ##########################################
     # Export to csv
     ##########################################
-    nprotocols = length(regression_stats[:pd_protocol])
-    writecsv && write_txt(
-        filename = csv_file, protein_name = protein_name, 
-        HBM_stats = HBM_stats, regression_stats = regression_stats, 
-        bf = bfHBM, bfR = bfRegression, nprotocols = nprotocols
-        )
+    # Single-protocol RegressionStatistics omits the per-protocol breakdown
+    # (`:pd_protocol`, `:mean_protocol_slope`, …). When that's the case dispatch
+    # to write_txt_singleprotocol, which only writes the main slope.
+    if writecsv
+        if haskey(regression_stats, :pd_protocol)
+            write_txt(
+                filename = csv_file, protein_name = protein_name,
+                HBM_stats = HBM_stats, regression_stats = regression_stats,
+                bf = bfHBM, bfR = bfRegression,
+                nprotocols = length(regression_stats[:pd_protocol])
+            )
+        else
+            write_txt_singleprotocol(
+                filename = csv_file, protein_name = protein_name,
+                HBM_stats = HBM_stats, regression_stats = regression_stats,
+                bf = bfHBM, bfR = bfRegression
+            )
+        end
+    end
 
     return log2fc_mixt
 end
@@ -206,21 +232,21 @@ end
 function miconvertRegression(posterior::Vector{BayesResult})
     # initialize dictionary
     dict = Dict{Symbol, Any}()
-    parameter_names = keys(posterior[1].posteriorRegression.posteriors)
+    parameter_names = keys(posterior[1].regression_result.posterior.posteriors)
 
     # loop over parameters and populate dictionary
     for parameter in parameter_names
         # skip predicted_value
         parameter == :predicted_value && continue
-        if length(posterior[1].posteriorRegression.posteriors[parameter]) == 1
-            p = [posterior[i].posteriorRegression.posteriors[parameter] for i in eachindex(posterior)]
+        if length(posterior[1].regression_result.posterior.posteriors[parameter]) == 1
+            p = [posterior[i].regression_result.posterior.posteriors[parameter] for i in eachindex(posterior)]
             any(isa.(p, Gamma)) ? nothing : (p = to_normal.(p))
             dict[parameter] = MixtureModel(p)
             continue
         end
-        
-        for idx in eachindex(posterior[1].posteriorRegression.posteriors[parameter])
-            p = [posterior[i].posteriorRegression.posteriors[parameter][idx] for i in eachindex(posterior)]
+
+        for idx in eachindex(posterior[1].regression_result.posterior.posteriors[parameter])
+            p = [posterior[i].regression_result.posterior.posteriors[parameter][idx] for i in eachindex(posterior)]
             p = MixtureModel(to_normal.(p))
             idx == 1 ? (dict[parameter] = [p]) : push!(dict[parameter], p)
         end

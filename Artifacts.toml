@@ -1,0 +1,7 @@
+[bayesinteractomics_models]
+git-tree-sha1 = "4079ee3507e5c14435d4e55843cc1801c052ec22"
+lazy = true
+
+    [[bayesinteractomics_models.download]]
+    sha256 = "352692e3c863b029d8a15825ddf6147f5f6df199d56a16abe0635caba0767d76"
+    url = "https://github.com/ma-seefelder/BayesInteractomics.jl/releases/download/models-v1.2.1/models.tar.gz"

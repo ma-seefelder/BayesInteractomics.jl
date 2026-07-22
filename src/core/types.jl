@@ -1,5 +1,151 @@
 
-# ----------------------- Regression and HBM Results ----------------------- #
+# ----------------------- Jeffreys Threshold and Shifted Distributions -----------------------
+
+# Jeffreys threshold for H0/H1 enrichment boundary (~1.151 on log-BF scale)
+const JEFFREYS_SHIFT = log(sqrt(10))
+const SIGMOID_STEEPNESS = 5.0  # Smooth transition steepness at JEFFREYS_SHIFT
+
+"""
+    LocationShifted{T}(dist, shift)
+
+A univariate distribution shifted by a constant `shift`. Density is zero for x <= shift.
+Used as SklarDist marginal for H1 enrichment with the Jeffreys threshold.
+
+This parametric wrapper replaces the earlier `LocationShiftedGamma` concrete struct,
+supporting Gamma, LogNormal, Weibull, and any other ContinuousUnivariateDistribution.
+"""
+struct LocationShifted{T<:Distributions.ContinuousUnivariateDistribution} <: Distributions.ContinuousUnivariateDistribution
+    dist::T
+    shift::Float64
+end
+
+Distributions.pdf(d::LocationShifted, x::Real) = x <= d.shift ? 0.0 : pdf(d.dist, x - d.shift)
+Distributions.logpdf(d::LocationShifted, x::Real) = x <= d.shift ? -Inf : logpdf(d.dist, x - d.shift)
+Distributions.cdf(d::LocationShifted, x::Real) = x <= d.shift ? 0.0 : cdf(d.dist, x - d.shift)
+Distributions.quantile(d::LocationShifted, p::Real) = quantile(d.dist, p) + d.shift
+Distributions.minimum(d::LocationShifted) = d.shift
+Distributions.maximum(d::LocationShifted) = Inf
+Distributions.insupport(d::LocationShifted, x::Real) = x > d.shift
+
+# Type aliases for the three candidate H1 enrichment families
+const LocationShiftedGamma    = LocationShifted{Gamma{Float64}}
+const LocationShiftedLogNormal = LocationShifted{LogNormal{Float64}}
+const LocationShiftedWeibull  = LocationShifted{Weibull{Float64}}
+
+"""
+    NegativeLocationShifted{T}(dist, shift)
+
+A sign-flipped shifted distribution for H0 enrichment (negative enrichment side).
+The support is x < -shift (i.e., the negative reflection of LocationShifted{T}).
+CDF is monotone non-decreasing for SklarDist compatibility.
+"""
+struct NegativeLocationShifted{T<:Distributions.ContinuousUnivariateDistribution} <: Distributions.ContinuousUnivariateDistribution
+    dist::T
+    shift::Float64
+end
+
+Distributions.pdf(d::NegativeLocationShifted, x::Real) = x >= -d.shift ? 0.0 : pdf(d.dist, -x - d.shift)
+Distributions.logpdf(d::NegativeLocationShifted, x::Real) = x >= -d.shift ? -Inf : logpdf(d.dist, -x - d.shift)
+Distributions.cdf(d::NegativeLocationShifted, x::Real) = x >= -d.shift ? 1.0 : 1.0 - cdf(d.dist, -x - d.shift)
+Distributions.quantile(d::NegativeLocationShifted, p::Real) = -(quantile(d.dist, 1.0 - p) + d.shift)
+Distributions.minimum(d::NegativeLocationShifted) = -Inf
+Distributions.maximum(d::NegativeLocationShifted) = -d.shift
+Distributions.insupport(d::NegativeLocationShifted, x::Real) = x < -d.shift
+
+# Type alias for backward compatibility
+const NegativeLocationShiftedGamma = NegativeLocationShifted{Gamma{Float64}}
+
+# ----------------------- DiscreteEmpirical Distribution -----------------------
+
+"""
+    DiscreteEmpirical <: Distributions.DiscreteUnivariateDistribution
+
+A discrete distribution defined by a finite set of observed values and their
+empirical (or weighted) probabilities. Supports the full Distributions.jl interface.
+
+# Fields
+- `values::Vector{Float64}`: Sorted unique support values
+- `probs::Vector{Float64}`: Normalized probabilities (sums to 1)
+- `lookup::Dict{Float64, Float64}`: Fast O(1) probability lookup by value
+
+# Construction
+    DiscreteEmpirical(raw_values)
+    DiscreteEmpirical(raw_values, weights)
+
+Groups values by exact float equality, accumulates weights (default = 1 per observation),
+normalizes by total weight. Values are sorted ascending.
+
+# Empty-weight guard
+If `sum(weights) < 1e-10`, returns a stub distribution with support `[0.0]` and probability `[1.0]`.
+"""
+struct DiscreteEmpirical <: Distributions.DiscreteUnivariateDistribution
+    values::Vector{Float64}
+    probs::Vector{Float64}
+    lookup::Dict{Float64, Float64}
+end
+
+"""
+    _fit_discrete_empirical_weighted(values, weights)
+
+Construct a `DiscreteEmpirical` distribution from parallel `values` and `weights` vectors.
+Groups by exact float equality, accumulates weights per unique value, normalizes.
+Returns stub `DiscreteEmpirical([0.0], [1.0], Dict(0.0 => 1.0))` if sum(weights) < 1e-10.
+"""
+function _fit_discrete_empirical_weighted(values::AbstractVector{Float64}, weights::AbstractVector{Float64})
+    sw = sum(weights)
+    if sw < 1e-10
+        return DiscreteEmpirical([0.0], [1.0], Dict(0.0 => 1.0))
+    end
+
+    # Accumulate weights per unique value
+    acc = Dict{Float64, Float64}()
+    for (v, w) in zip(values, weights)
+        acc[v] = get(acc, v, 0.0) + w
+    end
+
+    # Sort by value
+    sorted_vals = sort!(collect(keys(acc)))
+    sorted_probs = [acc[v] / sw for v in sorted_vals]
+
+    # Build lookup
+    lookup = Dict{Float64, Float64}(v => p for (v, p) in zip(sorted_vals, sorted_probs))
+
+    return DiscreteEmpirical(sorted_vals, sorted_probs, lookup)
+end
+
+# Two-arg constructor: values + explicit weights
+function DiscreteEmpirical(raw_values::AbstractVector{<:Real}, weights::AbstractVector{<:Real})
+    return _fit_discrete_empirical_weighted(Float64.(raw_values), Float64.(weights))
+end
+
+# One-arg constructor: uniform weights (count occurrences)
+function DiscreteEmpirical(raw_values::AbstractVector{<:Real})
+    return _fit_discrete_empirical_weighted(Float64.(raw_values), ones(Float64, length(raw_values)))
+end
+
+# Distributions.jl interface
+Distributions.pdf(d::DiscreteEmpirical, x::Real) = get(d.lookup, Float64(x), 0.0)
+
+Distributions.logpdf(d::DiscreteEmpirical, x::Real) = begin
+    p = get(d.lookup, Float64(x), 0.0)
+    p <= 0.0 ? log(1e-300) : log(p)
+end
+
+function Distributions.cdf(d::DiscreteEmpirical, x::Real)
+    idx = searchsortedlast(d.values, Float64(x))
+    idx == 0 && return 0.0
+    return sum(d.probs[1:idx])
+end
+
+function Base.rand(rng::Random.AbstractRNG, d::DiscreteEmpirical)
+    return StatsBase.sample(rng, d.values, StatsBase.Weights(d.probs))
+end
+
+Distributions.minimum(d::DiscreteEmpirical) = first(d.values)
+Distributions.maximum(d::DiscreteEmpirical) = last(d.values)
+Distributions.insupport(d::DiscreteEmpirical, x::Real) = haskey(d.lookup, Float64(x))
+
+# ----------------------- Regression and HBM Results -----------------------
 
 """
     AbstractInferenceResult
@@ -222,7 +368,7 @@ Stores Hierarchical Bayesian Model inference results for analyses with multiple 
 Contains posterior samples for log2 fold changes (log2FC) at both protocol and experiment levels,
 capturing enrichment while accounting for between-protocol heterogeneity.
 
-See also: [`HBMResultSingleProtocol`](@ref), [`HierarchicalBayesianModel`](@ref)
+See also: [`HBMResultSingleProtocol`](@ref); the underlying RxInfer `@model` is `HierarchicalBayesianModel` in `src/inference/models.jl`.
 """
 struct HBMResultMultipleProtocols <: HBMResult
     posterior::InferenceResult
@@ -242,14 +388,14 @@ Stores Hierarchical Bayesian Model inference results for single protocol analyse
 Simpler hierarchical structure than multiple protocol case, with log2FC parameters
 at the experiment level only.
 
-See also: [`HBMResultMultipleProtocols`](@ref), [`HierarchicalBayesianModel`](@ref)
+See also: [`HBMResultMultipleProtocols`](@ref); the underlying RxInfer `@model` is `HierarchicalBayesianModelSingle` in `src/inference/models.jl`.
 """
 struct HBMResultSingleProtocol <: HBMResult
     posterior::InferenceResult
     prior::InferenceResult
 end
 
-# ----------------------- BayesResult ----------------------- #
+# ----------------------- BayesResult -----------------------
 
 """
     BayesResult
@@ -353,7 +499,7 @@ function Base.show(io::IO, bf::BayesResult)
 end
 
 
-# ----------------------- Copula-related structures ----------------------- #
+# ----------------------- Copula-related structures -----------------------
 abstract type EvidenceTriplet end
 
 function Base.show(io::IO, triplet::EvidenceTriplet)
@@ -362,7 +508,7 @@ function Base.show(io::IO, triplet::EvidenceTriplet)
     println(io, "Number of proteins: $n_proteins")
 end
 
-# ------ BayesFactorTriplet ------ #
+# ------ BayesFactorTriplet ------
 
 """
     BayesFactorTriplet{T<:Real} <: EvidenceTriplet
@@ -446,7 +592,7 @@ end
 function Base.log(p::BayesFactorTriplet)
     return BayesFactorTriplet(log10.(p.enrichment), log10.(p.correlation), log10.(p.detection))
 end
-# ------ PosteriorProbabilityTriplet ------ #
+# ------ PosteriorProbabilityTriplet ------
 
 """
     _all_are_probabilities(v::AbstractVector{<:Real})
@@ -642,29 +788,54 @@ function squeeze(p::PosteriorProbabilityTriplet{T}; ϵ=eps(T)) where {T<:Real}
     )
 end
 
-# ------ EM results ------ #
+# ------ EM results ------
 """
-    EMResult(π0, π1, joint_H1, logs)
+    EMResult(π0, π1, pi_ag, joint_H1, joint_H0, joint_ag, logs, has_converged)
 
 Holds the fitted parameters and convergence logs from the EM algorithm.
+
+Supports both 2-component (legacy: H0/H1) and 3-component (H0/agnostic/H1) models.
+For 2-component use the backward-compatible 5-arg constructor.
+
+# Fields
+- `π0::Float64`: H0 mixing weight
+- `π1::Float64`: H1 mixing weight
+- `pi_ag::Float64`: Agnostic mixing weight (0.0 for 2-component)
+- `joint_H1::SklarDist`: H1 joint distribution
+- `joint_H0::Union{SklarDist, Nothing}`: H0 joint distribution (nothing for 2-component legacy)
+- `joint_ag::Union{SklarDist, Nothing}`: Agnostic joint distribution (nothing for 2-component)
+- `logs::DataFrame`: EM iteration logs (iter, pi0, pi1, ll)
+- `has_converged::Bool`: Whether EM converged
 """
 struct EMResult
     π0::Float64
     π1::Float64
+    pi_ag::Float64
     joint_H1::SklarDist
+    joint_H0::Union{SklarDist, Nothing}
+    joint_ag::Union{SklarDist, Nothing}
     logs::DataFrame
     has_converged::Bool
 end
 
+# Backward-compat constructor (5 args -- old 2-component code)
+function EMResult(π0::Float64, π1::Float64, joint_H1::SklarDist, logs::DataFrame, has_converged::Bool)
+    EMResult(π0, π1, 0.0, joint_H1, nothing, nothing, logs, has_converged)
+end
+
 function Base.show(io::IO, r::EMResult)
-    println(io, "EMResult(π0=$(round(r.π0, digits=3)))")
+    if r.pi_ag > 0.0
+        println(io, "EMResult(pi_H0=$(round(r.π0, digits=3)), pi_ag=$(round(r.pi_ag, digits=3)), pi_H1=$(round(r.π1, digits=3)))")
+    else
+        println(io, "EMResult(pi0=$(round(r.π0, digits=3)))")
+    end
     println(io, "------------------------------------")
     println(io, "algorithm has converged: $(r.has_converged)")
     println(io, "Convergence at $(r.logs[end, :iter]) iterations")
 end
 
 
-# ------ AbstractCombinationResult ------ #
+# ------ AbstractCombinationResult ------
 """
     AbstractCombinationResult
 
@@ -681,12 +852,13 @@ Extract combined Bayes factors from any combination result type.
 get_bf(r::AbstractCombinationResult) = r.bf
 
 
-# ------ CombinedBayesResult ------ #
+# ------ CombinedBayesResult ------
 """
-    CombinedBayesResult(bf, posterior_prob, joint_H0, joint_H1, em_result, em_diagnostics)
+    CombinedBayesResult <: AbstractCombinationResult
 
 The final output of the copula-based Bayesian interactomics analysis, containing
-the combined Bayes Factors, posterior probabilities, and fitted mixture models.
+the combined Bayes Factors, posterior probabilities, fitted mixture models,
+and diagnostic information from the copula fitting.
 
 # Fields
 - `bf::Vector{Float64}`: Combined Bayes factors for each protein
@@ -695,6 +867,13 @@ the combined Bayes Factors, posterior probabilities, and fitted mixture models.
 - `joint_H1::SklarDist`: Joint distribution under alternative hypothesis
 - `em_result::EMResult`: Best EM fitting result
 - `em_diagnostics::Union{DataFrame, Nothing}`: Diagnostics from EM restarts (nothing if n_restarts=1)
+- `h0_copula_family::String`: Best copula family for H0 (e.g., "FrankCopula")
+- `h1_copula_family::String`: Best copula family for H1 (may differ from H0)
+- `ks_results::NamedTuple`: KS statistic per marginal (on H0 proteins)
+- `marginal_upgraded::NamedTuple`: Whether each H0 marginal was upgraded from Normal to LocationScale(TDist)
+- `n_h0::Int`: Number of proteins assigned to H0
+- `n_h1::Int`: Number of proteins assigned to H1
+- `n_agnostic::Int`: Number of proteins assigned to agnostic
 """
 struct CombinedBayesResult <: AbstractCombinationResult
     bf::Vector{Float64}
@@ -703,24 +882,89 @@ struct CombinedBayesResult <: AbstractCombinationResult
     joint_H1::SklarDist
     em_result::EMResult
     em_diagnostics::Union{DataFrame, Nothing}
+    # KS diagnostic fields (merged from CopulaLogBFResult)
+    h0_copula_family::String
+    h1_copula_family::String
+    ks_results::NamedTuple{(:enrichment, :correlation, :detection), Tuple{Float64, Float64, Float64}}
+    marginal_upgraded::NamedTuple{(:enrichment, :correlation, :detection), Tuple{Bool, Bool, Bool}}
+    n_h0::Int
+    n_h1::Int
+    n_agnostic::Int
+end
+
+# Backward-compat constructor (6 args -- old code without KS fields)
+function CombinedBayesResult(bf, posterior_prob, joint_H0, joint_H1, em_result, em_diagnostics)
+    CombinedBayesResult(bf, posterior_prob, joint_H0, joint_H1, em_result, em_diagnostics,
+        "", "", (enrichment=0.0, correlation=0.0, detection=0.0),
+        (enrichment=false, correlation=false, detection=false), 0, 0, 0)
+end
+
+function Base.show(io::IO, r::CombinedBayesResult)
+    println(io, "CombinedBayesResult")
+    println(io, "------------------------------------")
+    if !isempty(r.h0_copula_family)
+        println(io, "Proteins: H0=$(r.n_h0), agnostic=$(r.n_agnostic), H1=$(r.n_h1)")
+        println(io, "H0 copula: $(r.h0_copula_family)")
+        println(io, "H1 copula: $(r.h1_copula_family)")
+        println(io, "KS (enrichment): $(round(r.ks_results.enrichment, digits=4))" *
+                (r.marginal_upgraded.enrichment ? " [upgraded to TDist]" : " [Normal]"))
+        println(io, "KS (correlation): $(round(r.ks_results.correlation, digits=4))" *
+                (r.marginal_upgraded.correlation ? " [upgraded to TDist]" : " [Normal]"))
+        println(io, "KS (detection): $(round(r.ks_results.detection, digits=4))" *
+                (r.marginal_upgraded.detection ? " [upgraded to TDist]" : " [Normal]"))
+    end
+    println(io, "EM converged: $(r.em_result.has_converged)")
+    if r.em_result.pi_ag > 0.0
+        println(io, "pi_H0=$(round(r.em_result.π0, digits=3)), pi_ag=$(round(r.em_result.pi_ag, digits=3)), pi_H1=$(round(r.em_result.π1, digits=3))")
+    else
+        println(io, "pi0=$(round(r.em_result.π0, digits=3)), pi1=$(round(r.em_result.π1, digits=3))")
+    end
 end
 
 
-# ------ LatentClassResult ------ #
+# ------ LatentClassResult ------
 """
-    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations[, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_family, h1_bic_scores])
 
-The final output of the latent class (VMP-based) Bayesian interactomics analysis.
+The final output of the latent class Bayesian interactomics analysis.
+
+Supports both 2-component (legacy: background/interaction) and 3-component
+(background/agnostic/interaction) models. The number of components is inferred
+from the length of `mixing_weights`.
 
 # Fields
 - `bf::Vector{Float64}`: Combined Bayes factors for each protein
 - `posterior_prob::Vector{Float64}`: Posterior probabilities for each protein
-- `class_parameters::Dict{String, NamedTuple{(:mu, :sigma, :precision), Tuple{Float64,Float64,Float64}}}`:
-   Parameters for background and interaction classes
-- `mixing_weights::Vector{Float64}`: [P(background), P(interaction)]
-- `free_energy::Vector{Float64}`: Free energy per VMP iteration
+- `class_parameters::Dict{String, NamedTuple{(mu, :sigma, :precision), Tuple{Float64,Float64,Float64}}}`:
+   Parameters for each class. Keys: "background", "interaction" (2-component) or
+   "background", "agnostic", "interaction" (3-component). Values are dimension-averaged.
+- `mixing_weights::Vector{Float64}`: [P(background), P(interaction)] for 2-component
+   or [P(background), P(agnostic), P(interaction)] for 3-component
+- `free_energy::Vector{Float64}`: Log-likelihood per EM iteration (convergence trace)
 - `converged::Bool`: Whether the algorithm converged
 - `n_iterations::Int`: Number of iterations performed
+- `responsibilities::Union{Nothing, Matrix{Float64}}`: n x K responsibility matrix
+   (K=2 for legacy, K=3 for 3-component). `nothing` for backward compatibility.
+- `all_restart_traces::Union{Nothing, Vector{Vector{Float64}}}`: EM restart log-likelihood traces
+- `alpha_enrichment_h1::Float64`: Gamma shape parameter for H1 enrichment marginal
+- `theta_enrichment_h1::Float64`: Gamma scale parameter for H1 enrichment marginal
+- `h1_enrichment_sd::Float64`: Data-space standard deviation of H1 enrichment (computed from LocationShifted distribution)
+- `h1_enrichment_family::Symbol`: BIC-selected family for H1 enrichment (gamma, :lognormal, :weibull)
+- `h1_bic_scores::Dict{Symbol, Float64}`: BIC scores per family at selection point
+- `disc_detection_H0::Union{Nothing, DiscreteEmpirical}`: Fitted discrete empirical detection marginal for H0 component
+- `disc_detection_ag::Union{Nothing, DiscreteEmpirical}`: Fitted discrete empirical detection marginal for agnostic component
+- `disc_detection_H1::Union{Nothing, DiscreteEmpirical}`: Fitted discrete empirical detection marginal for H1 component
+- `per_step_ll_traces::Union{Nothing, Vector{NamedTuple}}`: Per-restart vectors of (ll_after_e, ll_after_m) for monotonicity tracking
+- `n_step_halving_reverts::Union{Nothing, Vector{Int}}`: Per-restart count of LL violations
+- `per_dimension_params::Union{Nothing, Dict{String, NamedTuple{(mu_e, :sigma_e, :mu_c, :sigma_c, :mu_p, :sigma_p), NTuple{6, Float64}}}}`: Per-component per-dimension means and std devs (keys: "background", "agnostic", "interaction"). Used by simulation engine for dimension-specific draws/scoring instead of dimension-averaged class_parameters.
+- `nu_h0::Float64`: Student-t degrees of freedom for H0 enrichment distribution (0.0 = Normal fallback, i.e. BIC did not select Student-t)
+- `kl_divergence::Float64`: KL(H0 || Agnostic) enrichment divergence (-1.0 = sentinel, not yet computed)
+- `merged::Bool`: Whether H0 and Agnostic components were merged post-EM
+- `effective_alpha_prior::Vector{Float64}`: Actual Dirichlet alpha used (EB-estimated or explicit). Empty vector as default for backward compatibility.
+- `prior_grid_weights::Union{Nothing, Vector{Float64}}`: BIC weights per grid point (nothing = single alpha, no grid).
+- `prior_grid_posteriors::Union{Nothing, Vector{Vector{Float64}}}`: Per-grid-point posteriors for stability analysis.
+- `eb_converged::Bool`: Whether Empirical Bayes iteration converged (false = explicit alpha or not yet run).
+- `protein_names::Union{Nothing, Vector{String}}`: Protein identifiers matching responsibilities rows (nothing = legacy/unknown).
 """
 struct LatentClassResult <: AbstractCombinationResult
     bf::Vector{Float64}
@@ -730,6 +974,85 @@ struct LatentClassResult <: AbstractCombinationResult
     free_energy::Vector{Float64}
     converged::Bool
     n_iterations::Int
+    responsibilities::Union{Nothing, Matrix{Float64}}
+    all_restart_traces::Union{Nothing, Vector{Vector{Float64}}}
+    alpha_enrichment_h1::Float64
+    theta_enrichment_h1::Float64
+    h1_enrichment_sd::Float64               # data-space SD from LocationShifted distribution
+    h1_enrichment_family::Symbol
+    h1_bic_scores::Dict{Symbol, Float64}
+    em_diagnostics::Union{Nothing, DataFrame}
+    disc_detection_H0::Union{Nothing, DiscreteEmpirical}
+    disc_detection_ag::Union{Nothing, DiscreteEmpirical}
+    disc_detection_H1::Union{Nothing, DiscreteEmpirical}
+    per_step_ll_traces::Union{Nothing, Vector{NamedTuple{(:ll_after_e, :ll_after_m), Tuple{Vector{Float64}, Vector{Float64}}}}}
+    n_step_halving_reverts::Union{Nothing, Vector{Int}}
+    per_dimension_params::Union{Nothing, Dict{String, NamedTuple{(:mu_e, :sigma_e, :mu_c, :sigma_c, :mu_p, :sigma_p), NTuple{6, Float64}}}}
+    nu_h0::Float64                    # Student-t df for H0 enrichment (0.0 = Normal fallback)
+    kl_divergence::Float64            # KL(H0 || Agnostic) enrichment divergence (-1.0 = not computed)
+    merged::Bool                      # Whether H0 and Agnostic were merged post-EM
+    annealing_schedule::Vector{Float64}    # Post-EM annealing temperature schedule
+    bimodality_coefficient::Float64        # Sarle's BC on final posteriors (>0.555 = bimodal)
+    effective_alpha_prior::Vector{Float64}                         # actual Dirichlet alpha used (EB or explicit)
+    prior_grid_weights::Union{Nothing, Vector{Float64}}            # BIC weights per grid point (nothing = single alpha)
+    prior_grid_posteriors::Union{Nothing, Vector{Vector{Float64}}} # per-grid-point posteriors for stability analysis
+    eb_converged::Bool                                             # whether EB iteration converged
+    protein_names::Union{Nothing, Vector{String}}                  # protein identifiers matching responsibilities rows
+end
+
+# Helper to compute data-space SD from enrichment parameters
+function _compute_h1_enrichment_sd(alpha::Float64, theta::Float64, family::Symbol)::Float64
+    if family == :lognormal
+        std(LogNormal(alpha, theta))
+    elseif family == :weibull
+        std(Weibull(alpha, theta))
+    else  # :gamma
+        sqrt(alpha) * theta
+    end
+end
+
+# Canonical 21-arg constructor: includes per_step_ll_traces, n_step_halving_reverts, per_dimension_params
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics, disc_H0, disc_ag, disc_H1, per_step_ll_traces, n_step_halving_reverts, per_dimension_params)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics, disc_H0, disc_ag, disc_H1, per_step_ll_traces, n_step_halving_reverts, per_dimension_params, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Canonical 18-arg constructor: no per_step_ll_traces/n_step_halving_reverts/per_dimension_params (default to nothing)
+# Explicit h1_enrichment_sd — used by 3c EM return path
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics, disc_H0, disc_ag, disc_H1)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics, disc_H0, disc_ag, disc_H1, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Canonical 15-arg constructor: no disc_detection fields (default to nothing)
+# Explicit h1_enrichment_sd
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_sd, h1_enrichment_family, h1_bic_scores, em_diagnostics, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Backward-compatible 13-arg constructor: auto-computes h1_enrichment_sd from alpha/theta/family
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, h1_enrichment_family, h1_bic_scores)
+    _sd = _compute_h1_enrichment_sd(Float64(alpha_enrichment_h1), Float64(theta_enrichment_h1), h1_enrichment_family)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, _sd, h1_enrichment_family, h1_bic_scores, nothing, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Backward-compatible 11-arg constructor: no h1_enrichment_family/h1_bic_scores (default to :gamma)
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1)
+    _sd = _compute_h1_enrichment_sd(Float64(alpha_enrichment_h1), Float64(theta_enrichment_h1), :gamma)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, alpha_enrichment_h1, theta_enrichment_h1, _sd, :gamma, Dict{Symbol,Float64}(:gamma => 0.0, :lognormal => Inf, :weibull => Inf), nothing, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Backward-compatible constructor: 9-arg (no alpha/theta, no family)
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, all_restart_traces, 2.0, 2.0, _compute_h1_enrichment_sd(2.0, 2.0, :gamma), :gamma, Dict{Symbol,Float64}(:gamma => 0.0, :lognormal => Inf, :weibull => Inf), nothing, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Backward-compatible constructor: 8-arg (no all_restart_traces, no alpha/theta, no family)
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, responsibilities, nothing, 2.0, 2.0, _compute_h1_enrichment_sd(2.0, 2.0, :gamma), :gamma, Dict{Symbol,Float64}(:gamma => 0.0, :lognormal => Inf, :weibull => Inf), nothing, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
+end
+
+# Backward-compatible constructor: 7-arg (no responsibilities, no all_restart_traces, no alpha/theta, no family)
+function LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations)
+    LatentClassResult(bf, posterior_prob, class_parameters, mixing_weights, free_energy, converged, n_iterations, nothing, nothing, 2.0, 2.0, _compute_h1_enrichment_sd(2.0, 2.0, :gamma), :gamma, Dict{Symbol,Float64}(:gamma => 0.0, :lognormal => Inf, :weibull => Inf), nothing, nothing, nothing, nothing, nothing, nothing, nothing, 0.0, -1.0, false, Float64[], 0.0, Float64[], nothing, nothing, false, nothing)
 end
 
 function Base.show(io::IO, r::LatentClassResult)
@@ -737,55 +1060,101 @@ function Base.show(io::IO, r::LatentClassResult)
     println(io, "------------------------------------")
     println(io, "Converged: $(r.converged)")
     println(io, "Iterations: $(r.n_iterations)")
-    println(io, "Mixing weights: π₀=$(round(r.mixing_weights[1], digits=3)), π₁=$(round(r.mixing_weights[2], digits=3))")
-    println(io, "Background: μ=$(round(r.class_parameters["background"].mu, digits=3)), σ=$(round(r.class_parameters["background"].sigma, digits=3))")
-    println(io, "Interaction: μ=$(round(r.class_parameters["interaction"].mu, digits=3)), σ=$(round(r.class_parameters["interaction"].sigma, digits=3))")
+    n_components = length(r.mixing_weights)
+    if n_components == 3
+        println(io, "Components: 3 (H0/agnostic/H1)")
+        println(io, "Mixing weights: pi_H0=$(round(r.mixing_weights[1], digits=3)), pi_ag=$(round(r.mixing_weights[2], digits=3)), pi_H1=$(round(r.mixing_weights[3], digits=3))")
+        println(io, "Background: mu=$(round(r.class_parameters["background"].mu, digits=3)), sigma=$(round(r.class_parameters["background"].sigma, digits=3))")
+        if haskey(r.class_parameters, "agnostic")
+            println(io, "Agnostic: mu=$(round(r.class_parameters["agnostic"].mu, digits=3)), sigma=$(round(r.class_parameters["agnostic"].sigma, digits=3))")
+        end
+        println(io, "H1 enrichment family: :$(r.h1_enrichment_family) (BIC-selected)")
+        println(io, "Interaction enrichment: Gamma(alpha=$(round(r.alpha_enrichment_h1, digits=3)), theta=$(round(r.theta_enrichment_h1, digits=3))) + JEFFREYS_SHIFT")
+        println(io, "Interaction (corr+det): mu=$(round(r.class_parameters["interaction"].mu, digits=3)), sigma=$(round(r.class_parameters["interaction"].sigma, digits=3))")
+    else
+        println(io, "Mixing weights: pi_0=$(round(r.mixing_weights[1], digits=3)), pi_1=$(round(r.mixing_weights[2], digits=3))")
+        println(io, "Background: mu=$(round(r.class_parameters["background"].mu, digits=3)), sigma=$(round(r.class_parameters["background"].sigma, digits=3))")
+        println(io, "Interaction: mu=$(round(r.class_parameters["interaction"].mu, digits=3)), sigma=$(round(r.class_parameters["interaction"].sigma, digits=3))")
+    end
+    if r.responsibilities !== nothing
+        println(io, "Responsibilities: $(size(r.responsibilities, 1)) proteins x $(size(r.responsibilities, 2)) components")
+    end
 end
 
 
-# ------ BMAResult ------ #
+# ------ BMAResult ------
 """
-    BMAResult(bf, posterior_prob, copula_result, latent_class_result,
-              copula_bic, latent_class_bic, copula_weight, latent_class_weight)
+    BMAResult(bf, posterior_prob, copula_result, em3c_result,
+              em_weight, copula_weight, model_disagreement, pareto_k, prior_odds)
 
-Result of Bayesian Model Averaging (BMA) over copula and latent class combination methods.
+Result of Bayesian Model Averaging (BMA) over copula and 3-component EM combination methods.
 
-BMA weights both methods by their BIC-approximated marginal likelihoods, producing
-model-averaged posterior probabilities that properly propagate model uncertainty.
+BMA uses LOO stacking weights (Yao et al. 2018) to average exactly 2 models:
+the 3-component EM (stage 1) and the copula (stage 2). Stacking weights optimize
+predictive performance and assign meaningful weight to both models when they
+capture different aspects of the data.
 
 # Fields
 - `bf::Vector{Float64}`: Model-averaged combined Bayes factors
 - `posterior_prob::Vector{Float64}`: Model-averaged posterior probabilities
-- `copula_result::CombinedBayesResult`: Full copula combination result
-- `latent_class_result::LatentClassResult`: Full latent class combination result
-- `copula_bic::Float64`: BIC for the copula model
-- `latent_class_bic::Float64`: BIC for the latent class model
-- `copula_weight::Float64`: BIC-derived model weight for copula
-- `latent_class_weight::Float64`: BIC-derived model weight for latent class
+- `copula_result::CombinedBayesResult`: Copula sub-model result (stage 2)
+- `em3c_result::LatentClassResult`: 3-component EM result (stage 1)
+- `em_weight::Float64`: Stacking weight for EM model
+- `copula_weight::Float64`: Stacking weight for copula model
+- `model_disagreement::BitVector`: Per-protein disagreement flag (true when models give opposite classification)
+- `pareto_k::Union{Nothing, Vector{Float64}}`: Pareto k-hat diagnostics (nothing if not computed)
+- `prior_odds::Float64`: Shared prior odds from EM mixing weights: pi_H1 / (pi_H0 + pi_agnostic)
 """
 struct BMAResult <: AbstractCombinationResult
     bf::Vector{Float64}
     posterior_prob::Vector{Float64}
     copula_result::CombinedBayesResult
-    latent_class_result::LatentClassResult
-    copula_bic::Float64
-    latent_class_bic::Float64
+    em3c_result::LatentClassResult
+    em_weight::Float64
     copula_weight::Float64
-    latent_class_weight::Float64
+    model_disagreement::BitVector
+    pareto_k::Union{Nothing, Vector{Float64}}
+    prior_odds::Float64
+end
+
+# Backward-compatible property access for renamed/removed fields
+function Base.getproperty(bma::BMAResult, s::Symbol)
+    if s === :latent_class_result
+        @warn "BMAResult.latent_class_result is deprecated, use .em3c_result" maxlog=1
+        return getfield(bma, :em3c_result)
+    elseif s === :latent_class_weight
+        return 1.0 - getfield(bma, :copula_weight)
+    elseif s === :latent_class_bic
+        return NaN
+    elseif s === :copula_bic
+        return NaN
+    elseif s === :family_details
+        return nothing
+    else
+        return getfield(bma, s)
+    end
 end
 
 function Base.show(io::IO, r::BMAResult)
     println(io, "BMAResult")
     println(io, "------------------------------------")
-    println(io, "Copula BIC:       $(round(r.copula_bic, digits=2))")
-    println(io, "Latent class BIC: $(round(r.latent_class_bic, digits=2))")
-    println(io, "Copula weight:    $(round(r.copula_weight, digits=4))")
-    println(io, "LC weight:        $(round(r.latent_class_weight, digits=4))")
-    println(io, "Proteins:         $(length(r.bf))")
+    println(io, "EM weight:        $(round(getfield(r, :em_weight), digits=4))")
+    println(io, "Copula weight:    $(round(getfield(r, :copula_weight), digits=4))")
+    println(io, "Prior odds:       $(round(getfield(r, :prior_odds), digits=4))")
+    n_disagree = count(getfield(r, :model_disagreement))
+    n_total = length(getfield(r, :bf))
+    println(io, "Disagreement:     $n_disagree/$n_total proteins")
+    pk = getfield(r, :pareto_k)
+    if pk !== nothing
+        k_max = maximum(pk)
+        k_med = median(pk)
+        println(io, "Pareto k-hat:     median=$(round(k_med, digits=3)), max=$(round(k_max, digits=3))")
+    end
+    println(io, "Proteins:         $n_total")
 end
 
 
-# ----------------------- Ranks ----------------------- #
+# ----------------------- Ranks -----------------------
 """
     Ranks{I<:Integer, F<:AbstractFloat}
 
@@ -815,14 +1184,12 @@ end
 
 getRanks(r::Ranks) = r.ranks
 getNames(r::Ranks) = r.names
-getMeanRanks(r::Ranks) = r.mean_ranks
-getMedianRanks(r::Ranks) = r.median_ranks
 Base.length(r::Ranks) = size(r.ranks, 1)
 Base.getindex(r::Ranks, i::Integer) = r.ranks[i, :]
 Base.iterate(r::Ranks, state=1) = state > length(r) ? nothing : ((r.names[state], r.ranks[state, :]), state + 1)
 
 
-# ----------------------- Data containers ----------------------- #
+# ----------------------- Data containers -----------------------
 
 # ---- Protocol
 
@@ -877,7 +1244,6 @@ Base.eltype(protocol::Protocol{F,I}) where {F<:AbstractFloat,I<:Integer} = Matri
 Base.isdone(protocol::Protocol, index::Integer) = index > getNoExperiments(protocol)
 
 getIDs(protocol::Protocol) = protocol.protein_ids
-getProtocolData(protocol::Protocol) = protocol.data
 
 function Base.iterate(protocol::Protocol, index::Integer=1)
     Base.isdone(protocol, index) && return nothing
@@ -976,6 +1342,11 @@ struct InteractionData{F<:AbstractFloat,I<:Integer} <: AbstractInteractionData
     protocol_positions::Vector{I}
     experiment_positions::Vector{I}
     matched_positions::Vector{I}
+
+    # BitVector where detected[i] = true if protein i has at least one non-missing
+    # intensity value in any sample replicate across all protocols and experiments.
+    # NOTE: OR-merge for curation is implicit — :max merge preserves non-missing values.
+    detected::BitVector
 end
 
 # interface
@@ -1006,6 +1377,53 @@ end
 getExperimentPositions(data::InteractionData) = data.experiment_positions
 getProtocolPositions(data::InteractionData) = unique(data.protocol_positions)
 getMatchedPositions(data::InteractionData) = data.matched_positions
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Content equality (deferred)
+#
+# `InteractionData` carries `Dict`-of-`Protocol`-of-`Matrix{Union{Missing,Float64}}`
+# fields, so the default struct `===`/`isequal` falls back to object identity and is
+# `false` for any two distinct `load_data` / `apply_normalisation` results regardless of
+# content. The byte-equality anchors (`:none ≡ normalise_protocols=false`;
+# `:row_center ≡ normalise_protocols=true`) need a CONTENT comparison that treats
+# `missing == missing` as equal — hence `isequal` (NOT `==`, which propagates `missing`).
+#
+# Equality is over the observable data content: protein IDs + names, protocol layout
+# (no_protocols / no_experiments / parameter counts / position vectors), the detection
+# mask, and every per-(protocol, experiment) sample + control matrix (cell-wise via
+# `isequal`, so a `missing` cell matches a `missing` cell). Float cells compare with
+# `isequal` (bit-for-bit; `-0.0 != 0.0` and `NaN` matches `NaN`) — appropriate for the
+# byte-equality contract.
+# ─────────────────────────────────────────────────────────────────────────────
+function _isequal_protocol_dict(a::Dict, b::Dict)::Bool
+    keys(a) == keys(b) || return false
+    for pid in keys(a)
+        pa = a[pid]; pb = b[pid]
+        pa.no_experiments == pb.no_experiments || return false
+        pa.protein_ids == pb.protein_ids || return false
+        keys(pa.data) == keys(pb.data) || return false
+        for exp in keys(pa.data)
+            isequal(pa.data[exp], pb.data[exp]) || return false
+        end
+    end
+    return true
+end
+
+function Base.isequal(a::InteractionData, b::InteractionData)::Bool
+    a.protein_IDs == b.protein_IDs || return false
+    a.protein_names == b.protein_names || return false
+    a.no_protocols == b.no_protocols || return false
+    a.no_experiments == b.no_experiments || return false
+    a.no_parameters_HBM == b.no_parameters_HBM || return false
+    a.no_parameters_Regression == b.no_parameters_Regression || return false
+    a.protocol_positions == b.protocol_positions || return false
+    a.experiment_positions == b.experiment_positions || return false
+    a.matched_positions == b.matched_positions || return false
+    a.detected == b.detected || return false
+    _isequal_protocol_dict(a.samples, b.samples) || return false
+    _isequal_protocol_dict(a.controls, b.controls) || return false
+    return true
+end
 
 
 # iteration interface
@@ -1244,15 +1662,36 @@ function getMaxSamples(protein::Protein)
 end
 
 function getMatrix(protein::Protein, data::Vector{Dict{I,Vector{Union{Missing,F}}}}) where {F<:AbstractFloat,I<:Integer}
-    # convert to a Array
-    max_experiments, max_samples = getMaxExperiments(protein), getMaxSamples(protein)
+    # convert to a Array.
+    #
+    # dim-2 (experiments) and dim-3 (replicates) are sized to the max over BOTH
+    # samples AND controls — NOT just the sample side. Two reasons:
+    # 1. getSampleMatrix and getControlMatrix are cat'd along dims=2 in the
+    # regression (models.jl), so they MUST share dims 1 and 3.
+    # 2. controls can have more replicates per experiment than samples (e.g.
+    # a single-experiment pulldown with 6 EGFP controls but 3 mutant samples).
+    # The previous `getMaxSamples(protein)` (sample-only) under-sized dim-3 for
+    # the control matrix, so the @inbounds write `x[.., 1:length(vals)] .= vals`
+    # overflowed → heap corruption / GC EXCEPTION_ACCESS_VIOLATION downstream.
+    # For balanced data (control replicates ≤ sample replicates) this is identical
+    # to the previous behaviour.
+    max_experiments = 1
+    max_samples = 1
+    for src in (getSamples(protein), getControls(protein))
+        for protocol_dict in src
+            for (experiment_key, vals) in protocol_dict
+                max_experiments = max(max_experiments, experiment_key)
+                max_samples = max(max_samples, length(vals))
+            end
+        end
+    end
     dims = (length(data), max_experiments, max_samples)
     x::Array{Union{Missing,F},3} = fill(missing, dims...)
 
-    @inbounds for (sample, experiment) ∈ Iterators.product(1:length(data), 1:max_experiments)
+    for (sample, experiment) ∈ Iterators.product(1:length(data), 1:max_experiments)
         vals = get(data[sample], experiment, nothing)
         isnothing(vals) && continue
-        x[sample, experiment, 1:length(vals)] .= vals
+        x[sample, experiment, 1:length(vals)] .= vals    # bounds-checked: dim-3 now fits the longest replicate vector
     end
     return x
 end

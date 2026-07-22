@@ -6,9 +6,9 @@ merging duplicate proteins, and removing contaminants. All decisions
 are recorded in a CurationReport for reproducibility.
 =#
 
-import CSV as CurCSV
 import DataFrames: DataFrame, nrow, ncol, names as df_names, select!, insertcols!
-import Dates: DateTime, now
+import Dates: DateTime, now, Millisecond, value
+import Dates
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Contaminant removal
@@ -596,7 +596,7 @@ After splitting protein groups and renaming to canonical names, multiple rows ma
 share the same protein name. This function merges those rows using the specified
 strategy (`:max` or `:mean`) for numeric columns.
 
-This is distinct from the STRING-based synonym merge (Phase 5-6) which handles
+This is distinct from the STRING-based synonym merge (Steps 5-6) which handles
 proteins with *different* names mapping to the same STRING ID. This handles
 proteins that already have the *same* name after all renaming is done.
 """
@@ -746,7 +746,7 @@ function curate_proteins(
 
     @info "Starting protein curation" n_proteins=n_before species=species
 
-    # ── Phase 1: Remove contaminants ──────────────────────────────────────
+    # ── Step 1: Remove contaminants ───────────────────────────────────────
     if do_remove_contaminants
         df, contam_entries = remove_contaminants(df, id_col)
         append!(all_entries, contam_entries)
@@ -754,7 +754,7 @@ function curate_proteins(
         n_removed > 0 && @info "Removed $n_removed contaminant/decoy entries"
     end
 
-    # ── Phase 2: Split protein groups ─────────────────────────────────────
+    # ── Step 2: Split protein groups ──────────────────────────────────────
     df, split_entries = split_protein_groups(df, id_col; delimiter=delimiter)
     # Only keep CURATE_SPLIT entries (CURATE_KEEP from splitting is preliminary)
     split_only = filter(e -> e.action == CURATE_SPLIT, split_entries)
@@ -762,7 +762,7 @@ function curate_proteins(
     n_split = count(e -> e.action == CURATE_SPLIT && e.is_lead, split_entries)
     n_split > 0 && @info "Split $n_split protein groups into individual entries ($(nrow(df)) rows)"
 
-    # ── Phase 3: Resolve via STRING ───────────────────────────────────────
+    # ── Step 3: Resolve via STRING ────────────────────────────────────────
     protein_names = String.(unique(string.(df[:, id_col])))
     resolution = try
         resolve_to_string_ids(protein_names; species=species, cache_dir=cache_dir)
@@ -780,7 +780,7 @@ function curate_proteins(
     n_unmapped = length(resolution.unmapped)
     @info "STRING ID resolution" mapped=n_mapped unmapped=n_unmapped cache_used=resolution.cache_used
 
-    # ── Phase 4: Find merge candidates ────────────────────────────────────
+    # ── Step 4: Find merge candidates ─────────────────────────────────────
     candidates = find_merge_candidates(
         resolution.name_to_id,
         resolution.id_to_preferred,
@@ -788,7 +788,7 @@ function curate_proteins(
         df, id_col
     )
 
-    # ── Phase 5: Confirm or replay merges ─────────────────────────────────
+    # ── Step 5: Confirm or replay merges ──────────────────────────────────
     merge_decisions = MergeDecision[]
     if !isempty(candidates)
         if !isnothing(replay_report)
@@ -806,7 +806,7 @@ function curate_proteins(
         end
     end
 
-    # ── Phase 6: Apply merges ─────────────────────────────────────────────
+    # ── Step 6: Apply merges ──────────────────────────────────────────────
     merged_names = Set{String}()
     if !isempty(merge_decisions)
         df, merge_entries = merge_protein_rows(df, merge_decisions, id_col; strategy=merge_strategy)
@@ -822,7 +822,7 @@ function curate_proteins(
         end
     end
 
-    # ── Phase 7: Rename remaining proteins ────────────────────────────────
+    # ── Step 7: Rename remaining proteins ─────────────────────────────────
     rename_entries = apply_renames!(
         df, id_col,
         resolution.name_to_id,
@@ -833,7 +833,7 @@ function curate_proteins(
     n_renamed = count(e -> e.action == CURATE_RENAME, rename_entries)
     n_renamed > 0 && @info "Renamed $n_renamed protein(s) to STRING preferred names"
 
-    # ── Phase 8: Deduplicate same-name rows ───────────────────────────────
+    # ── Step 8: Deduplicate same-name rows ────────────────────────────────
     # After splitting groups and renaming to canonical names, multiple rows
     # may now share the same protein name. Merge them using the configured strategy.
     n_before_dedup = nrow(df)
@@ -942,7 +942,7 @@ function save_curation_report(report::CurationReport, base_path::String)
             group_id = [something(e.group_id, "") for e in report.entries],
             is_lead = [e.is_lead for e in report.entries],
         )
-        CurCSV.write(csv_path, log_df)
+        CSV.write(csv_path, log_df)
         @info "Saved curation log (CSV)" path=csv_path
     catch e
         @warn "Failed to save CSV curation log" path=csv_path exception=e

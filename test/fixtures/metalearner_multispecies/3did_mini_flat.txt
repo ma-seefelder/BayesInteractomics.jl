@@ -1,0 +1,4 @@
+#=ID	DomA	DomB	(PF00001.25@Pfam	PF00002.18@Pfam)
+#=3D	0	example
+#=ID	DomC	DomD	(PF00003.12@Pfam	PF00004.9@Pfam)
+#=3D	0	example

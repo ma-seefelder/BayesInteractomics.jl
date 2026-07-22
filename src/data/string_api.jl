@@ -9,14 +9,13 @@ independent of the extension, using only stdlib (Downloads, Dates, SHA) and CSV.
 import Downloads
 import Dates: DateTime, now, Millisecond, value
 import SHA: sha256
-import CSV: read as csv_read
 import DataFrames: DataFrame, nrow, eachrow
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-const CURATION_STRING_API_BASE = "https://version-12-0.string-db.org/api"
+const CURATION_STRING_API_BASE = "https://string-db.org/api"
 const CURATION_RATE_LIMIT_MS = 1000
 const CURATION_CHUNK_SIZE = 500
 const CURATION_MAX_RETRIES = 3
@@ -109,7 +108,10 @@ function _curation_string_request(
 
     url = CURATION_STRING_API_BASE * "/" * endpoint
     body_str = _curation_form_encode(params)
-    headers = ["Content-Type" => "application/x-www-form-urlencoded"]
+    headers = [
+        "Content-Type" => "application/x-www-form-urlencoded",
+        "User-Agent" => "BayesInteractomics.jl (https://github.com)"
+    ]
 
     last_error = nothing
 
@@ -220,7 +222,7 @@ function _resolve_names_via_string(
             continue
         end
 
-        df = csv_read(IOBuffer(response_text), DataFrame; delim='\t', silencewarnings=true)
+        df = CSV.read(IOBuffer(response_text), DataFrame; delim='\t', silencewarnings=true)
 
         if nrow(df) == 0
             append!(unmapped, chunk)

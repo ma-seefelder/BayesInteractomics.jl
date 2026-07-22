@@ -161,6 +161,141 @@ data = load_data(
 )
 ```
 
+## Normalisation
+
+BayesInteractomics applies sample / protocol normalisation at the END of [`load_data`](@ref) (BEFORE imputation). Normalisation operates on the log2 scale and preserves `missing` cells. The pipeline supports four concrete normalisation methods plus an `:auto` selector that auto-detects multi-protocol scale mismatch and applies the appropriate combination.
+
+### The `normalisation_method` selector
+
+Set via the `CONFIG.normalisation_method::Symbol` field (or the `normalisation_method=` kwarg to [`load_data`](@ref)). Allowed values:
+
+| Value                | Behaviour                                                                                                                       | Backing function                                                       |
+|----------------------|---------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| `:none`              | Identity (no normalisation). Byte-identical to the pre-v1.2.0 `normalise_protocols=false` behaviour.                            | passthrough                                                            |
+| `:row_center`        | Per-protein per-(protocol, exp) row-centering. Byte-identical to the pre-v1.2.0 `normalise_protocols=true` behaviour.           | `normalize(data)`                                                      |
+| `:median_of_ratios`  | DESeq size-factor column-scaling normaliser. Stays on log2; missing-aware; per-protein geometric mean over fully-observed rows. | [`norm_median_of_ratios_id`](@ref)                                     |
+| `:both`              | Apply `:median_of_ratios` FIRST, then `:row_center` (column-scale then row-center).                                            | `normalize(norm_median_of_ratios_id(data))`                            |
+| `:auto` (default)    | Auto-detect multi-protocol scale mismatch via `detect_protocol_scale_mismatch`; apply `:both` if mismatch detected, else `:none`. Resolution happens at `load_data` apply time. | `_resolve_normalisation_method` |
+
+The dispatcher [`apply_normalisation`](@ref) routes an already-RESOLVED concrete method onto an `InteractionData`. `:auto` is resolved BEFORE dispatch; passing `:auto` to `apply_normalisation` directly throws `ArgumentError`.
+
+### Legacy `normalise_protocols::Bool` back-compat
+
+The pre-v1.2.0 `CONFIG.normalise_protocols::Bool` kwarg still works. Precedence rule (from `_resolve_normalisation_method` in `src/data/loading.jl`): if `normalisation_method !== :none` the new selector is AUTHORITATIVE; otherwise the legacy bool is mapped (`true → :row_center`, `false → :none`). Existing scripts that pass only `normalise_protocols=true` continue to row-center exactly as before.
+
+### Method details
+
+**`:median_of_ratios` — DESeq size-factor column scaling.** For each MS-run column `j`, compute the size factor `s_j = median_i(y_ij / geomean_i)` where `geomean_i` is the per-protein geometric mean over proteins observed in ALL columns; divide column `j` by `s_j`; round-trip back to log2. The `<= 0 → missing` guard prevents NaN/Inf leaking into HBM/regression downstream. Operates via the `build_run_matrix` / `matrix_to_interactiondata` round-trip — flatten `InteractionData` into a `(n_proteins × n_runs)` log2 matrix, normalise, write back. Composition-bias + missing robust; beats row-centering on replicate noise and MA flatness in benchmarks.
+
+**`:row_center` — per-protein cross-protocol row-centering.** The pre-v1.2.0 `normalize()` behaviour: subtract the per-protein per-(protocol, exp) row mean from each cell. Required to fix multi-protocol `bf_correlation` saturation (median_of_ratios alone leaves ~38% saturated; row-centering brings it to 0%; the two compose). Row-centering subtracts a CONSTANT from sample AND control, which cancels in the sample−control contrast — HBM-safe, log2FC-invariant.
+
+**`:both` — column-scale then row-center.** Column-scale FIRST then row-center. Orthogonal axes (column-scaling fixes sample loading, row-centering fixes the per-protein cross-protocol baseline offset). Used by `:auto` when a multi-protocol scale mismatch is detected.
+
+### Ordering: normalise BEFORE impute
+
+Normalisation runs BEFORE MNAR imputation. The MNAR dropout curve `σ(ρ_c + ζ_c · ȳ_i)` is intensity-scale-sensitive, so size factors must be computed on the pre-imputation observed data. Imputing first contaminates the size factors — imputation accuracy is higher with normalise→impute ordering for all normalisers.
+
+For the **user-pre-imputes workflow** (where you produce an imputed XLSX file then re-load it), use [`normalise_then_impute`](@ref) to guarantee the correct order. The two-step file path (`impute_mnar_from_paths` writes `dataset_mnar.xlsx`, then `load_data(...; normalisation_method=...)` reads it) normalises AFTER imputation — the WRONG order. `load_data` emits a warning if it reads an already-imputed file with a non-`:none` normalisation requested.
+
+**Signature:**
+
+```julia
+normalise_then_impute(
+    raw_data::InteractionData,
+    dropout_fit::DropoutFit;
+    normalisation_method::Symbol = :auto,
+    refID::Int = 1,
+) -> InteractionData
+```
+
+Steps: (1) resolve `normalisation_method` (`:auto` → `detect_protocol_scale_mismatch` → `:both` or `:none`, identical to the `load_data` apply site); (2) `apply_normalisation(raw_data, resolved)` on the OBSERVED data; (3) extract the post-normalisation intensity matrix, MNAR-impute once via the imputation extension's `impute_mnar`, and round-trip back into a complete `InteractionData` mirroring `raw_data`'s schema. Requires `using GLM` (loads `BayesInteractomicsImputationExt`) — errors loudly via `_require_imputation_extension(:mnar)` when the extension is absent. See [Imputation](imputation.md) for the imputation half of the workflow.
+
+### Worked example
+
+```julia
+using BayesInteractomics, GLM
+
+# (1) Default — auto-detect multi-protocol scale mismatch
+config = CONFIG(
+    datafile = ["data.xlsx"],
+    # normalisation_method defaults to :auto
+)
+
+# (2) Force the full :both recipe unconditionally
+config = CONFIG(
+    datafile = ["data.xlsx"],
+    normalisation_method = :both,
+)
+
+# (3) User-pre-imputes workflow — normalise FIRST, impute SECOND
+raw_data = load_data(["data.xlsx"], sample_cols, control_cols;
+                      normalisation_method = :none, impute = false)
+fit = fit_dropout_curves(raw_data)
+imputed = normalise_then_impute(raw_data, fit; normalisation_method = :auto)
+```
+
+See [Configuration](configuration.md) for the CONFIG-field reference and [Imputation](imputation.md) for the imputation half of the user-pre-imputes workflow.
+
+## Bait Anchoring
+
+Bait anchoring is a regression-safe per-condition normalisation step that equalises the bait protein's MEAN sample level across protocols (= conditions). It is used by [`differential_analysis`](@ref) when multiple conditions (e.g. WT vs mutant) are compared and the bait's expression level differs systematically between them. Anchoring removes the per-condition bait-level gap from each prey's enrichment (sample − control) while preserving the dose axis used by the regression model.
+
+### The `bait_anchor_id` helper
+
+**Signature:**
+
+```julia
+bait_anchor_id(data::InteractionData; bait_row::Int=1) -> InteractionData
+```
+
+Computes a per-protocol scalar `δ_c` and subtracts it from the SAMPLE cells (controls untouched) of that protocol's bait row:
+
+```
+δ_c = mean(bait SAMPLE level in protocol c) − grand mean of per-protocol bait sample means
+```
+
+where the grand mean averages over protocols with at least one observed bait sample. `bait_row` defaults to `1` (the `refID` / bait position in the protein order); pass an explicit row index if the bait is not the first protein.
+
+**No-op when fewer than 2 protocols** — single-condition data has nothing to anchor. Missings preserved.
+
+**SAMPLE cells only.** Subtracting `δ_c` from BOTH sample and control would cancel in the sample−control contrast and leave the differential unchanged. The whole point of bait-anchoring is to shift the differential by the bait-level gap — hence sample-only.
+
+### Regression-safety contract
+
+Each protocol's bait sample cells shift by a per-protocol CONSTANT. Within-condition run-to-run bait variation (the regression dose axis) is preserved and the predictor is never zeroed or de-varied. This is the property that makes bait-anchoring safe to apply BEFORE the dose-response Bayesian regression — the alternative `quantile` / `cyclic_loess` approaches destroy the dose axis and are forbidden for differential AP-MS.
+
+### Caller contract: apply on RAW bait abundance
+
+`δ_c` is derived from the bait abundance of the data AS PASSED, so callers MUST apply `bait_anchor_id` on the data on which RAW bait abundance is meaningful — relative to RAW bait levels, NOT post-(re)scaling values that would reposition the high-abundance bait differently per condition. On matched-level multi-protocol loads (e.g. real HAP40 GST/Strep, ~30 vs ~30.1 log2) `δ_c ≈ 0` and the anchor is correctly near-inert.
+
+### Differential analysis bait-anchor pathway
+
+The in-pipeline bait-anchor helper `_apply_bait_anchor_diff!` (in `src/differential/analysis.jl`) is the entry point used by [`differential_analysis`](@ref). It calls `bait_anchor_id` on each condition's `InteractionData` before the dBF computation begins, ensuring the per-condition bait-level gap is removed from the enrichment statistic that feeds into the BMA (Copula + 3c-EM) sub-models. See [Differential Analysis](differential_analysis.md) for the dBF flow that consumes the bait-anchored data.
+
+### `CONFIG.bait_name` + `refID` interaction with curation
+
+The bait position in the protein order can be RELOCATED by the data curation step (`curate=true` default). `load_data` accepts a `bait_name::Union{Nothing, String}=nothing` kwarg; when set, the curation pipeline tracks the bait through synonym resolution / contaminant removal / protein-group splitting and returns the bait's NEW row index after curation. `run_analysis` then updates `CONFIG.refID` to point at the relocated bait, so downstream consumers of the bait row (including `bait_anchor_id(data; bait_row=config.refID)`) target the correct row.
+
+Pass `bait_name` whenever curation may reorder proteins:
+
+```julia
+data, bait_idx = load_data(
+    files, sample_cols, control_cols;
+    bait_name = "HAP40",      # canonical name; curation resolves synonyms
+    curate = true,             # default
+)
+config = CONFIG(
+    datafile = files,
+    sample_cols = sample_cols,
+    control_cols = control_cols,
+    poi = "HAP40",
+    refID = bait_idx,          # post-curation position
+    # ...
+)
+```
+
+See [Data Curation](data_curation.md) for the curation pipeline; `bait_anchor_id` is a downstream consumer of the curation-stable `refID`.
+
 ## The `load_data` Function
 
 ### Basic Usage
@@ -403,9 +538,12 @@ where $\mu$ and $\sigma$ are computed from all samples within that protocol.
 
 ## API Reference
 
-Functions for loading and processing AP-MS and proximity labeling data.
+Functions and types for loading and processing AP-MS and proximity labeling data.
 
-```@autodocs
-Modules = [BayesInteractomics]
-Pages = ["data_loading.jl", "utils.jl"]
+```@docs
+load_data
+InteractionData
+Protocol
+Protein
+getProteinData
 ```

@@ -5,6 +5,13 @@ println("\n=== Testing EM Diagnostics Caching ===\n")
 
 basepath = "C:/Users/Manuel/Desktop/HAP40_interactome_enrichment/wtHAP40"
 
+# Resolve the shipped model file via the metalearner extension (dev repo tree OR
+# the lazily-downloaded `bayesinteractomics_models` artifact). Falls back to
+# `nothing` (→ CONFIG default resolution) when the extension is not loaded.
+_mlext = Base.get_extension(BayesInteractomics, :BayesInteractomicsMetalearnerExt)
+metalearner_path_resolved = _mlext === nothing ? nothing :
+    _mlext.resolve_metalearner_path("metalearners/HistGradientBoosting_tune.jld2")
+
 wtHAP40_config = BayesInteractomics.CONFIG(
     datafile = ["data/GST_HAP40.xlsx","data/HAP40_Strep.xlsx"],
     control_cols = [
@@ -27,7 +34,7 @@ wtHAP40_config = BayesInteractomics.CONFIG(
     plotbayesrange = false,
     verbose = false,
     vc_legend_pos = :topleft,
-    metalearner_path = "metalearners/HistGradientBoosting_tune.jld2"
+    metalearner_path = metalearner_path_resolved
 )
 
 # Run analysis (should load from cache since we've run it before)

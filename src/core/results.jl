@@ -5,7 +5,7 @@ using JLD2
 using Dates
 import DataFrames: nrow
 
-const CACHE_VERSION = 6
+const CACHE_VERSION = 26  # TR+DDI metalearner schema (14 features default; +mc_std opt-in). Legacy AnalysisResult caches with the old 8-feature metalearner posterior are silently discarded by the existing per-cache version-discard idiom (per-cache constants in src/core/intermediate_cache.jl are unchanged). Non-MC :tr_ddi is the default (metalearner_use_mc_dropout=false); stale v25 caches discarded.
 
 """
     AbstractAnalysisResult
@@ -26,7 +26,7 @@ This structure stores all outputs from `run_analysis()` along with hash-based va
 to enable intelligent caching and avoid redundant computation.
 
 # Fields
-- `copula_results::DataFrame`: Final results with combined Bayes factors, posterior probabilities, and q-values
+- `copula_results::DataFrame`: Final results with combined Bayes factors, posterior probabilities, PEP, and BFDR values
 - `df_hierarchical::DataFrame`: Detailed hierarchical model results including individual protein statistics
 - `em::Union{EMResult, Nothing}`: EM algorithm results from copula mixture fitting (copula mode only)
 - `joint_H0::Union{SklarDist, Nothing}`: Fitted copula distribution under null hypothesis (copula mode only)
@@ -44,13 +44,14 @@ to enable intelligent caching and avoid redundant computation.
 - `bait_index::Union{Int, Nothing}`: Index of bait protein in the protein list
 - `sensitivity::Union{SensitivityResult, Nothing}`: Prior sensitivity analysis results (if `run_sensitivity=true`)
 - `diagnostics::Union{DiagnosticsResult, Nothing}`: Posterior predictive check and model diagnostics results (if `run_diagnostics=true`)
+- `metalearner_status::Symbol`: Indicates how `posterior_prob` was computed. `:loaded` = metalearner-adjusted, `:extension_not_loaded` = BF-derived (Variante B fallback), `:prediction_failed` = metalearner extension loaded but call failed.
 
 # Iterator Interface
 Iterates over `(protein_name, row_data)` tuples from copula_results.
 
 ```julia
 for (protein, row) in result
-    println("\$protein: BF = \$(row.BF), q-value = \$(row.q)")
+    println("\$protein: BF = \$(row.BF), BFDR = \$(row.BFDR)")
 end
 ```
 
@@ -69,7 +70,7 @@ println("Number of proteins: ", length(analysis_result))
 
 # Get specific protein
 row = analysis_result["ProteinA"]
-println("BF: ", row.BF, ", Q-value: ", row.q)
+println("BF: ", row.BF, ", BFDR: ", row.BFDR)
 
 # Iterate over all proteins
 for (protein, data) in analysis_result
@@ -110,7 +111,83 @@ mutable struct AnalysisResult <: AbstractAnalysisResult
     bait_index::Union{Int, Nothing}
     sensitivity::Union{SensitivityResult, Nothing}
     diagnostics::Union{DiagnosticsResult, Nothing}
+    input_qc::Union{Nothing, InputQCResult}
+    metalearner_status::Symbol  # :extension_not_loaded | :loaded | :prediction_failed
+    # (Pitfall 2): per-bait sim result, populated in run_analysis(::CONFIG);
+    # nothing for path-based / cached load. Required by the differential report's
+    # per-condition Calibration tab which iterates diff.analyses[i].simulation_result.
+    # NOT JLD2-cached in BetaBernoulliCache or HBMRegressionCache (verified by grep
+    # over src/core/intermediate_cache.jl); the only JLD2 path is save_result/load_result
+    # in this file, both updated to round-trip the new fields. CACHE_VERSION bumped 21 → 22.
+    simulation_result::Union{Nothing, SimulationResult}
+    # (Pitfall 4): per-bait CONFIG, populated in run_analysis(::CONFIG);
+    # nothing for path-based / cached load. Required by the differential report's
+    # per-condition Methods tab which calls _build_methods_json(ar.config, ...).
+    config::Union{Nothing, CONFIG}
+    # dataset-level ECE-gate provenance flag. true when Platt
+    # calibration was applied and passed the ECE safety check; false when calibration
+    # was skipped, failed, or run on a legacy/cached path that pre-dates this flag.
+    # Settable post-construction (mutable struct) so pipeline.jl can assign after
+    # the calibration decision is made. Round-tripped through save_result/load_result
+    # under CACHE_VERSION = 23; legacy caches (≤ 22) load as nothing via the existing
+    # cache_version mismatch path and never reach the is_calibrated field.
+    is_calibrated::Bool
+    # Embeddings result for sample/protein UMAP/t-SNE and condition
+    # similarity (single-bait case). `nothing` for legacy paths, path-based loads,
+    # or when CONFIG.embeddings_config.run_embeddings == false. Round-tripped via
+    # save_result/load_result under CACHE_VERSION = 24. Partial-invalidation gate
+    # `_should_recompute_embeddings(ar, cfg)` compares the embedded
+    # `config_snapshot` against the current EmbeddingsConfig snapshot.
+    embeddings::Union{Nothing, EmbeddingsResult}
 end
+
+# backward-compat constructor: pre-Phase-69 callers (20 positional args)
+# keep working with simulation_result=nothing and config=nothing defaults.
+# extended to also default is_calibrated=false.
+# extended to also default embeddings=nothing.
+AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+               latent_class_result, bma_result, combination_method,
+               em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+               timestamp, package_version, bait_protein, bait_index,
+               sensitivity, diagnostics, input_qc, metalearner_status) =
+    AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+                   latent_class_result, bma_result, combination_method,
+                   em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+                   timestamp, package_version, bait_protein, bait_index,
+                   sensitivity, diagnostics, input_qc, metalearner_status,
+                   nothing, nothing, false, nothing)
+
+# backward-compat constructor: pre-Phase-70 callers (22 positional args,
+# i.e. the canonical signature) keep working with is_calibrated=false default.
+# extended to also default embeddings=nothing.
+AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+               latent_class_result, bma_result, combination_method,
+               em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+               timestamp, package_version, bait_protein, bait_index,
+               sensitivity, diagnostics, input_qc, metalearner_status,
+               simulation_result, config) =
+    AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+                   latent_class_result, bma_result, combination_method,
+                   em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+                   timestamp, package_version, bait_protein, bait_index,
+                   sensitivity, diagnostics, input_qc, metalearner_status,
+                   simulation_result, config, false, nothing)
+
+# backward-compat constructor: pre-Phase-71 callers (23 positional args,
+# i.e. the canonical signature including is_calibrated) keep working with
+# embeddings=nothing default.
+AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+               latent_class_result, bma_result, combination_method,
+               em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+               timestamp, package_version, bait_protein, bait_index,
+               sensitivity, diagnostics, input_qc, metalearner_status,
+               simulation_result, config, is_calibrated) =
+    AnalysisResult(copula_results, df_hierarchical, em, joint_H0, joint_H1,
+                   latent_class_result, bma_result, combination_method,
+                   em_diagnostics, em_diagnostics_summary, config_hash, data_hash,
+                   timestamp, package_version, bait_protein, bait_index,
+                   sensitivity, diagnostics, input_qc, metalearner_status,
+                   simulation_result, config, is_calibrated, nothing)
 
 # Property accessor for backward compatibility with network extension
 """
@@ -136,7 +213,7 @@ function Base.propertynames(r::AnalysisResult, private::Bool=false)
     return (:results, fieldnames(AnalysisResult)...)
 end
 
-# ----------------------- Hash Functions ----------------------- #
+# ----------------------- Hash Functions -----------------------
 
 """
     compute_config_hash(config::CONFIG)::UInt64
@@ -180,7 +257,11 @@ function compute_config_hash(config::CONFIG)::UInt64
         config.n_controls,
         config.n_samples,
         config.refID,
-        config.combination_method
+        config.combination_method,
+        config.regression_likelihood,
+        config.student_t_nu,
+        config.regression_bf_threshold,
+        string(config.lc_alpha_prior)
     )
     return hash(hashable)
 end
@@ -252,7 +333,13 @@ function compute_data_hash(data::Vector{InteractionData}, raw_data::InteractionD
     return h
 end
 
-# ----------------------- Iterator Interface ----------------------- #
+# Tuple form: pipeline.jl's check_cache passes (imputed_data, raw_data) as a
+# single Tuple argument. Forward to the (Vector, InteractionData) method.
+function compute_data_hash(pair::Tuple{Vector{InteractionData}, InteractionData})::UInt64
+    return compute_data_hash(pair[1], pair[2])
+end
+
+# ----------------------- Iterator Interface -----------------------
 
 """
     Base.length(r::AnalysisResult)
@@ -307,7 +394,7 @@ first_protein = result[1]
 """
 Base.getindex(r::AnalysisResult, i::Integer) = r.copula_results[i, :]
 
-# ----------------------- Serialization ----------------------- #
+# ----------------------- Serialization -----------------------
 
 """
     save_result(result::AnalysisResult, filepath::String)
@@ -345,7 +432,20 @@ function save_result(result::AnalysisResult, filepath::String)
         bait_protein = result.bait_protein,
         bait_index = result.bait_index,
         sensitivity = result.sensitivity,
-        diagnostics = result.diagnostics
+        diagnostics = result.diagnostics,
+        input_qc = result.input_qc,
+        metalearner_status = result.metalearner_status,
+        # persist simulation_result + config so reloading from cache
+        # preserves AR-overload differential_analysis ability to populate analyses.
+        # Both default to nothing on legacy caches via get(...) fallbacks below.
+        simulation_result = result.simulation_result,
+        config = result.config,
+        # persist dataset-level ECE-gate provenance flag.
+        # Defaults to false on legacy caches via get(...) fallback in load_result.
+        is_calibrated = result.is_calibrated,
+        # persist EmbeddingsResult (or nothing) for partial cache
+        # invalidation. Defaults to nothing on legacy caches via get(...) fallback.
+        embeddings = result.embeddings
     )
 end
 
@@ -401,7 +501,13 @@ function load_result(filepath::String)::Union{AnalysisResult, Nothing}
             get(data, "bait_protein", nothing),
             get(data, "bait_index", nothing),
             get(data, "sensitivity", nothing),
-            get(data, "diagnostics", nothing)
+            get(data, "diagnostics", nothing),
+            get(data, "input_qc", nothing),
+            get(data, "metalearner_status", :extension_not_loaded),
+            get(data, "simulation_result", nothing),
+            get(data, "config", nothing),
+            get(data, "is_calibrated", false),
+            get(data, "embeddings", nothing)
         )
     catch e
         @warn "Failed to load cache: $e"
@@ -409,7 +515,7 @@ function load_result(filepath::String)::Union{AnalysisResult, Nothing}
     end
 end
 
-# ----------------------- Cache Validation ----------------------- #
+# ----------------------- Cache Validation -----------------------
 
 """
     CacheStatus
@@ -509,7 +615,7 @@ function get_cache_filepath(config::CONFIG)::String
     return joinpath(cache_dir, "analysis_cache_$(hash(config.datafile)).jld2")
 end
 
-# ----------------------- Convenience Functions ----------------------- #
+# ----------------------- Convenience Functions -----------------------
 
 """
     set_bait_info!(result::AnalysisResult; bait_protein=nothing, bait_index=nothing)
@@ -548,7 +654,7 @@ function set_bait_info!(result::AnalysisResult; bait_protein=nothing, bait_index
     return result
 end
 
-# ----------------------- Convenience Accessors ----------------------- #
+# ----------------------- Convenience Accessors -----------------------
 
 """
     getProteins(r::AnalysisResult)
@@ -590,17 +696,44 @@ likely_interactors = sum(probs .> 0.95)
 getPosteriorProbabilities(r::AnalysisResult) = r.copula_results.posterior_prob
 
 """
-    getQValues(r::AnalysisResult)
+    getBFDR(r::AnalysisResult)
 
-Get vector of q-values (Bayesian FDR) from results.
+Get vector of BFDR (Bayesian FDR) values from results.
 
 # Examples
 ```julia
-q_vals = getQValues(result)
-significant = sum(q_vals .< 0.05)
+bfdr_vals = getBFDR(result)
+significant = sum(bfdr_vals .< 0.05)
 ```
 """
-getQValues(r::AnalysisResult) = r.copula_results.q
+getBFDR(r::AnalysisResult) = r.copula_results.BFDR
+
+"""Deprecated: use `getBFDR()` instead."""
+function getQValues(r::AnalysisResult)
+    @warn "`getQValues()` is deprecated, use `getBFDR()` instead" maxlog=1
+    return getBFDR(r)
+end
+
+"""
+    getPEP(r::AnalysisResult) -> Vector{Union{Missing, Float64}}
+
+Return the canonical posterior error probability column from the bait result
+DataFrame. The column reflects the dataset-level calibration gate:
+
+- When `r.is_calibrated == true` (ECE gate `cal_ece < 0.10` passed), `pep_i = 1 − posterior_calibrated_i`.
+- Otherwise, `pep_i = 1 − posterior_prob_i`.
+
+Use `isCalibrated(r)` to query provenance.
+"""
+getPEP(r::AnalysisResult) = r.copula_results.pep
+
+"""
+    isCalibrated(r::AnalysisResult) -> Bool
+
+Whether `r.copula_results.pep` reflects Platt-calibrated posteriors. Calibration
+is a dataset-level decision gated by the ECE safety guard (`cal_ece < 0.10`).
+"""
+isCalibrated(r::AnalysisResult) = r.is_calibrated
 
 """
     getMeanLog2FC(r::AnalysisResult)
@@ -641,7 +774,7 @@ likely_interactors = sum(probs .> 0.95)
 """
 getPosteriorProbs(r::AnalysisResult) = r.copula_results.posterior_prob
 
-# ----------------------- Display ----------------------- #
+# ----------------------- Display -----------------------
 
 function Base.show(io::IO, r::AnalysisResult)
     println(io, "🧬 AnalysisResult")
@@ -656,8 +789,10 @@ function Base.show(io::IO, r::AnalysisResult)
     elseif r.combination_method == :latent_class && !isnothing(r.latent_class_result)
         println(io, " • VMP converged          : $(r.latent_class_result.converged)")
     elseif r.combination_method == :bma && !isnothing(r.bma_result)
+        println(io, " • EM weight              : $(round(r.bma_result.em_weight, digits=4))")
         println(io, " • Copula weight          : $(round(r.bma_result.copula_weight, digits=4))")
-        println(io, " • Latent class weight    : $(round(r.bma_result.latent_class_weight, digits=4))")
+        n_disagree = count(r.bma_result.model_disagreement)
+        println(io, " • Model disagreement     : $(n_disagree)/$(length(r.bma_result.bf)) proteins")
     end
 
     println(io, " • Config hash            : $(string(r.config_hash, base=16))")
@@ -665,13 +800,13 @@ function Base.show(io::IO, r::AnalysisResult)
     println(io)
 
     # Summary statistics
-    sig_05 = sum(r.copula_results.q .< 0.05)
-    sig_01 = sum(r.copula_results.q .< 0.01)
+    sig_05 = sum(r.copula_results.BFDR .< 0.05)
+    sig_01 = sum(r.copula_results.BFDR .< 0.01)
     high_prob = sum(r.copula_results.posterior_prob .> 0.95)
 
     println(io, "Significant hits:")
-    println(io, " • q < 0.05               : $sig_05 ($(round(100*sig_05/length(r), digits=1))%)")
-    println(io, " • q < 0.01               : $sig_01 ($(round(100*sig_01/length(r), digits=1))%)")
+    println(io, " • BFDR < 0.05            : $sig_05 ($(round(100*sig_05/length(r), digits=1))%)")
+    println(io, " • BFDR < 0.01            : $sig_01 ($(round(100*sig_01/length(r), digits=1))%)")
     println(io, " • P(interaction) > 0.95  : $high_prob ($(round(100*high_prob/length(r), digits=1))%)")
 
     if !isnothing(r.sensitivity)
@@ -684,6 +819,11 @@ function Base.show(io::IO, r::AnalysisResult)
         println(io, " • Prior settings tested  : $n_settings")
         println(io, " • Mean posterior range   : $(round(mean_range, digits=4))")
         println(io, " • Max posterior range    : $(round(max_range, digits=4))")
+    end
+
+    if !isnothing(r.input_qc)
+        println(io)
+        println(io, "Input QC: $(r.input_qc)")
     end
 
     if !isnothing(r.diagnostics)

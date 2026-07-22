@@ -315,7 +315,7 @@ end
 
 
 """
-    optimize_nu(data::InteractionData, config; lower=3.0, upper=50.0) -> NuOptimizationResult
+    optimize_nu(data::InteractionData, config; lower=5.0, upper=50.0) -> NuOptimizationResult
 
 Optimize the Student-t degrees-of-freedom parameter ν over [lower, upper] using Brent's method,
 minimizing WAIC for the robust regression model.
@@ -327,7 +327,7 @@ The Normal regression WAIC is computed once as a baseline for comparison.
 - `config`: Configuration object with fields `refID::Int` and `verbose::Bool` (e.g., `CONFIG`)
 
 # Keywords
-- `lower::Float64=3.0`: Lower bound for ν search
+- `lower::Float64=5.0`: Lower bound for ν search
 - `upper::Float64=50.0`: Upper bound for ν search
 
 # Returns
@@ -335,7 +335,7 @@ The Normal regression WAIC is computed once as a baseline for comparison.
 """
 function optimize_nu(
     data::InteractionData, config;
-    lower::Float64 = 3.0, upper::Float64 = 50.0
+    lower::Float64 = 5.0, upper::Float64 = 50.0
 )
     refID = config.refID
     verbose = config.verbose

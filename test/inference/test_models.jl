@@ -60,7 +60,10 @@ end
 
     # Vector with duplicates
     v_dups = ["A", "B", "A", "C"]
-    @test_throws AssertionError checkForDuplicates(v_dups)
+    # Behavior changed: checkForDuplicates no longer throws AssertionError on
+    # duplicates — it logs an @error and returns nothing. Assert the current
+    # contract (emits an error log, does not throw).
+    @test_logs (:error,) match_mode=:any checkForDuplicates(v_dups)
 
     # Vector without duplicates - should return nothing
     v_no_dups = ["A", "B", "C", "D"]
@@ -102,7 +105,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     protein = getProteinData(data, 1)
@@ -126,7 +130,8 @@ end
         Dict(1 => p),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     proto_pos = getProtocolPositions(data)
@@ -150,7 +155,8 @@ end
         Dict(1 => p, 2 => p),
         2, Dict(1 => 2, 2 => 2),
         8, 4,
-        [2, 5], [3, 4, 6, 7], [1, 1, 2, 2]
+        [2, 5], [3, 4, 6, 7], [1, 1, 2, 2],
+        trues(2)
     )
 
     matched = getMatchedPositions(data)
@@ -176,7 +182,8 @@ end
         Dict(1 => p, 2 => p),
         n_protocols, Dict(1 => n_experiments_per_protocol, 2 => n_experiments_per_protocol),
         8, 4,  # HBM params, regression params
-        [2, 5], [3, 4, 6, 7], [1, 1, 2, 2]
+        [2, 5], [3, 4, 6, 7], [1, 1, 2, 2],
+        trues(2)
     )
 
     # Verify parameter counts are reasonable
@@ -201,7 +208,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     log2fc = compute_log2FC(data, 1)
@@ -230,7 +238,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(3)
     )
 
     # Prepare regression data for protein 1 with reference protein 2
@@ -274,7 +283,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(5)
     )
 
     # τ0 returns a fitted Gamma distribution
@@ -301,14 +311,13 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
-    # μ0 returns a tuple: (median_of_means, max_variance)
+    # μ0 returns a 2-tuple: (median_of_means, maximum_variance)
     mu_median, max_sigma2 = μ0(data)
 
-    # μ0 median should be close to the overall mean of the data
     @test 7.0 < mu_median < 12.0
-    # max_sigma2 should be positive
-    @test max_sigma2 > 0.0
+    @test max_sigma2 > 0.0        # maximum variance
 end

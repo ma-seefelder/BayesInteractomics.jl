@@ -1,0 +1,5 @@
+accession	id	reviewed	cc_subcellular_location	xref_pfam
+P11111	A1_HUMAN	reviewed	Cytoplasm	PF00001;
+P22222	A2_HUMAN	reviewed	Nucleus	PF00002;
+Q33333	B1_MOUSE	reviewed	Cytoplasm	PF00003;
+Q44444	B2_MOUSE	reviewed	Membrane	PF00004;

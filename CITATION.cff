@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: BayesInteractomics
+abstract: >-
+  Bayesian framework for analyzing protein interactome data from
+  affinity-purification mass spectrometry (AP-MS) and proximity-labeling
+  experiments. Combines a deep-learning structural-interaction prior with a
+  three-stream Bayesian evidence engine (enrichment, correlation, detection)
+  via Bayesian model averaging to produce calibrated posterior probabilities
+  for protein-protein interactions.
+type: software
+version: 1.2.1
+# TODO: add `license:` and `repository-code:` once the public repo/licence are confirmed.
+authors:
+  # TODO: confirm the full author list (names, order, ORCIDs, affiliations)
+  #       before the preprint is posted. Seeded from Project.toml author line.
+  - family-names: Seefelder
+    given-names: Manuel
+    email: manuel.seefelder@uni-ulm.de
+    affiliation: Ulm University
+keywords:
+  - protein-protein interactions
+  - interactomics
+  - Bayesian statistics
+  - AP-MS
+  - proximity labeling
+  - Julia
+preferred-citation:
+  type: article
+  title: "BayesInteractomics: a Bayesian framework for protein interactome analysis"
+  # TODO: add the DOI once the preprint is posted (leave blank until then).
+  notes: "manuscript in preparation"
+  year: 2026
+  authors:
+    # TODO: mirror the confirmed author list here once finalised.
+    - family-names: Seefelder
+      given-names: Manuel
+      email: manuel.seefelder@uni-ulm.de
+      affiliation: Ulm University

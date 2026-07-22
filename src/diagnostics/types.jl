@@ -16,14 +16,15 @@ Configuration for prior sensitivity analysis sweeps.
 - `n_top_proteins`: Number of top proteins to highlight in reports
 """
 Base.@kwdef struct SensitivityConfig
-    bb_priors::Vector{Tuple{Float64,Float64}} = [
-        (1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (5.0, 5.0), (10.0, 10.0)
-    ]
+    bb_priors::Vector{Tuple{Float64,Float64}} = Tuple{Float64,Float64}[]
     em_prior_grid::Vector{NamedTuple{(:α,:β), Tuple{Float64,Float64}}} = [
         (α=10.0, β=190.0), (α=25.0, β=175.0), (α=50.0, β=100.0)
     ]
     lc_alpha_prior_grid::Vector{Vector{Float64}} = [
-        [20.0, 1.0], [10.0, 1.0], [5.0, 1.0]
+        [10.0, 5.0, 1.0],   # Conservative: strong H0, moderate agnostic, weak H1
+        [5.0, 5.0, 1.0],    # Balanced-conservative
+        [2.0, 2.0, 1.0],    # Balanced
+        [1.0, 1.0, 1.0],    # Uninformative (flat Dirichlet)
     ]
     n_top_proteins::Int = 20
 end
@@ -54,7 +55,7 @@ Complete results from a prior sensitivity analysis sweep.
 - `prior_settings`: Vector of PriorSetting describing each column of the matrices
 - `posterior_matrix`: Matrix of posterior probabilities (n_proteins × n_settings)
 - `bf_matrix`: Matrix of combined Bayes factors (n_proteins × n_settings)
-- `q_matrix`: Matrix of q-values (n_proteins × n_settings)
+- `bfdr_matrix`: Matrix of BFDR values (n_proteins × n_settings)
 - `protein_names`: Vector of protein identifiers
 - `baseline_index`: Column index of the baseline (default) prior setting
 - `summary`: Per-protein summary statistics across all settings
@@ -66,7 +67,7 @@ struct SensitivityResult
     prior_settings::Vector{PriorSetting}
     posterior_matrix::Matrix{Float64}
     bf_matrix::Matrix{Float64}
-    q_matrix::Matrix{Float64}
+    bfdr_matrix::Matrix{Float64}
     protein_names::Vector{String}
     baseline_index::Int
     summary::DataFrame
@@ -85,9 +86,9 @@ Configuration for posterior predictive checks and model diagnostics.
 
 # Fields
 - `n_ppc_draws::Int`: Number of posterior predictive draws per protein (default: 1000)
-- `n_proteins_to_check::Int`: Number of proteins to run PPC on (default: 50)
+- `n_proteins_to_check::Int`: Number of proteins to run PPC on (default: 0 = all proteins)
 - `ppc_protein_selection::Symbol`: Strategy for selecting proteins — `:top_and_random` selects
-  top N/2 by combined BF plus N/2 random (default: `:top_and_random`)
+  top N/2 by combined BF plus N/2 random (default: `:top_and_random`). Ignored when `n_proteins_to_check=0`.
 - `residual_model::Symbol`: Which model residuals to compute — `:both`, `:hbm`, or `:regression` (default: `:both`)
 - `calibration_bins::Int`: Number of bins for calibration assessment (default: 10)
 - `n_top_display::Int`: Number of top proteins to show in reports (default: 20)
@@ -95,13 +96,40 @@ Configuration for posterior predictive checks and model diagnostics.
 """
 Base.@kwdef mutable struct DiagnosticsConfig
     n_ppc_draws::Int = 1000
-    n_proteins_to_check::Int = 50
+    n_proteins_to_check::Int = 0
     ppc_protein_selection::Symbol = :top_and_random
     residual_model::Symbol = :both
     calibration_bins::Int = 10
     n_top_display::Int = 20
     seed::Int = 42
     enhanced_residuals::Bool = true
+end
+
+"""
+    BBMnarCodrivenConfig(; bb_bf_threshold = 10.0,
+                          hbm_bf_threshold = 10.0,
+                          missing_fraction_threshold = 0.5)
+
+Thresholds for the `bb_mnar_codriven` diagnostic flag.
+A protein is flagged when ALL THREE inequalities hold (strict `>`, not `>=`):
+
+    bb_mnar_codriven_i := (bf_detected_i  > bb_bf_threshold)
+                       ∧ (bf_combined_i   > hbm_bf_threshold)
+                       ∧ (missing_fraction_i > missing_fraction_threshold)
+
+`bf_combined` is the post-MNAR BMA combined Bayes factor (`BF` column on
+`copula_results`), NOT the standalone HBM enrichment factor. Biological
+rationale: when both pieces of evidence are
+strong AND a majority of replicates were originally missing, the two may
+not be statistically independent — both could be reinforcing an
+MNAR-imputation artefact rather than corroborating a real signal.
+
+Defaults sourced verbatim from the v1.2.0 milestone spec.
+"""
+Base.@kwdef mutable struct BBMnarCodrivenConfig
+    bb_bf_threshold::Float64            = 10.0    # § 7 spec
+    hbm_bf_threshold::Float64           = 10.0    # § 7 spec
+    missing_fraction_threshold::Float64 = 0.5     # § 7 spec
 end
 
 """
@@ -345,6 +373,94 @@ struct DiagnosticsResult
 end
 
 # ============================================================================ #
+# Quality Gate Types
+# ============================================================================ #
+
+"""
+    QualityGateCell
+
+Single cell in the 3x3 quality gate matrix (marginal x component).
+Each cell stores the KS test result for one (marginal, component) combination,
+plus histogram/PDF data for diagnostic overlay plots.
+"""
+struct QualityGateCell
+    marginal::Symbol           # :enrichment, :correlation, :detection
+    component::Symbol          # :H0, :agnostic, :H1
+    ks_statistic::Float64
+    status::Symbol             # :pass, :warn, :fail
+    fitted_distribution::Any   # Normal or TLocationScale
+    n_effective::Float64       # sum of responsibilities for this component
+    remediation_applied::Bool
+    hist_bin_edges::Vector{Float64}    # histogram bin edges (length = n_bins + 1)
+    hist_counts::Vector{Float64}       # normalized histogram counts (density, length = n_bins)
+    fitted_pdf_x::Vector{Float64}      # x values for fitted PDF curve
+    fitted_pdf_y::Vector{Float64}      # y values for fitted PDF curve
+end
+
+# Backward-compatible 7-arg constructor (no histogram/PDF data)
+function QualityGateCell(marginal::Symbol, component::Symbol, ks_statistic::Float64,
+                         status::Symbol, fitted_distribution, n_effective::Float64,
+                         remediation_applied::Bool)
+    QualityGateCell(marginal, component, ks_statistic, status, fitted_distribution,
+                    n_effective, remediation_applied,
+                    Float64[], Float64[], Float64[], Float64[])
+end
+
+"""
+    QualityGateResult
+
+Complete 3x3 quality gate matrix result with overall status.
+Rows = marginals (enrichment, correlation, detection), Columns = components (H0, agnostic, H1).
+"""
+struct QualityGateResult
+    cells::Matrix{QualityGateCell}   # 3 x 3 (marginals x components)
+    overall_status::Symbol
+    remediation_details::Vector{String}
+end
+
+"""
+    KLContaminationResult
+
+KL divergence between pure H1 and full H1 distributions per evidence stream.
+Measures how much non-interactors contaminate the H1 component.
+"""
+struct KLContaminationResult
+    kl_enrichment::Float64
+    kl_correlation::Float64
+    kl_detection::Float64
+    kl_joint::Float64          # sum of per-stream
+    pure_h1_count::Int         # N proteins with responsibility > 0.95
+    per_stream_pass::Bool      # all < 0.5
+end
+
+# ============================================================================ #
+# Validation Result (aggregates all diagnostic outputs)
+# ============================================================================ #
+
+"""
+    ValidationResult
+
+Aggregates all diagnostic outputs into a single result: quality gates,
+KL contamination, sensitivity threshold crossings, and internal consistency checks.
+
+# Fields
+- `quality_gates`: 3x3 quality gate matrix (or nothing if not computed)
+- `kl_contamination`: KL divergence between pure and full H1 (or nothing)
+- `sensitivity_crossings`: DataFrame of proteins crossing thresholds (or nothing)
+- `consistency_checks`: Dict of named boolean checks (e.g. "F8A1_P1", "all_ks_pass")
+- `overall_pass`: true if all consistency checks pass
+- `timestamp`: when the validation was run
+"""
+struct ValidationResult
+    quality_gates::Union{Nothing, QualityGateResult}
+    kl_contamination::Union{Nothing, KLContaminationResult}
+    sensitivity_crossings::Union{Nothing, DataFrame}
+    consistency_checks::Dict{String, Bool}
+    overall_pass::Bool
+    timestamp::DateTime
+end
+
+# ============================================================================ #
 # Pretty-print show methods
 # ============================================================================ #
 
@@ -379,7 +495,7 @@ end
 function Base.show(io::IO, c::DiagnosticsConfig)
     println(io, "DiagnosticsConfig")
     println(io, "  PPC draws          : $(c.n_ppc_draws)")
-    println(io, "  Proteins to check  : $(c.n_proteins_to_check)")
+    println(io, "  Proteins to check  : $(c.n_proteins_to_check == 0 ? "all" : string(c.n_proteins_to_check))")
     println(io, "  Selection strategy : :$(c.ppc_protein_selection)")
     println(io, "  Residual model     : :$(c.residual_model)")
     println(io, "  Calibration bins   : $(c.calibration_bins)")
@@ -563,4 +679,66 @@ function Base.show(io::IO, d::DiagnosticsResult)
     else
         print(io, "Protein Flags: not computed")
     end
+end
+
+# Quality Gate show methods
+
+function Base.show(io::IO, c::QualityGateCell)
+    status_str = c.status == :pass ? "PASS" : c.status == :warn ? "WARN" : "FAIL"
+    rem_str = c.remediation_applied ? " [remediated]" : ""
+    test_label = c.marginal == :detection ? "χ²p" : "KS"
+    print(io, "QualityGateCell(:$(c.marginal) x :$(c.component), $(test_label)=$(round(c.ks_statistic, digits=4)), $status_str$rem_str)")
+end
+
+function Base.show(io::IO, qg::QualityGateResult)
+    println(io, "QualityGateResult (overall: $(qg.overall_status))")
+    println(io, "───────────────────────────────────────────")
+    println(io, "           H0          Agnostic     H1")
+    marginal_labels = ["Enrichment", "Correlation", "Detection"]
+    for i in 1:3
+        row = String[]
+        test_label = i == 3 ? "χ²p" : "KS"
+        for j in 1:3
+            c = qg.cells[i, j]
+            s = c.status == :pass ? "PASS" : c.status == :warn ? "WARN" : "FAIL"
+            push!(row, "$s($test_label=$(round(c.ks_statistic, digits=3)))")
+        end
+        println(io, "  $(rpad(marginal_labels[i], 12)) $(rpad(row[1], 13))$(rpad(row[2], 13))$(row[3])")
+    end
+    if !isempty(qg.remediation_details)
+        println(io, "  Remediations: $(length(qg.remediation_details))")
+    end
+end
+
+function Base.show(io::IO, kl::KLContaminationResult)
+    pass_str = kl.per_stream_pass ? "PASS" : "FAIL"
+    println(io, "KLContaminationResult ($pass_str)")
+    println(io, "  Enrichment KL  : $(round(kl.kl_enrichment, digits=4))")
+    println(io, "  Correlation KL : $(round(kl.kl_correlation, digits=4))")
+    println(io, "  Detection KL   : $(round(kl.kl_detection, digits=4))")
+    println(io, "  Joint KL       : $(round(kl.kl_joint, digits=4))")
+    print(io,   "  Pure H1 count  : $(kl.pure_h1_count)")
+end
+
+function Base.show(io::IO, vr::ValidationResult)
+    pass_str = vr.overall_pass ? "PASS" : "FAIL"
+    println(io, "ValidationResult ($pass_str)")
+    println(io, "-----------------------------------")
+
+    if vr.quality_gates !== nothing
+        println(io, "  Quality gates  : $(vr.quality_gates.overall_status)")
+    else
+        println(io, "  Quality gates  : not computed")
+    end
+
+    if vr.kl_contamination !== nothing
+        println(io, "  KL joint       : $(round(vr.kl_contamination.kl_joint, digits=4))")
+    else
+        println(io, "  KL joint       : not computed")
+    end
+
+    n_checks = length(vr.consistency_checks)
+    n_pass = count(values(vr.consistency_checks))
+    println(io, "  Consistency    : $n_pass / $n_checks checks pass")
+    print(io,   "  Timestamp      : $(vr.timestamp)")
 end

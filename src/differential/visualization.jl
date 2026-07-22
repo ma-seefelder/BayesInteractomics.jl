@@ -8,7 +8,7 @@ Create a volcano plot for differential interaction analysis.
 
 # Keywords
 - `x_axis::Symbol = :log10_dbf`: X-axis metric (`:log10_dbf` or `:delta_log2fc`)
-- `y_axis::Symbol = :differential_q`: Y-axis metric (`:differential_q` → -log10(q), or `:differential_posterior`)
+- `y_axis::Symbol = :differential_BFDR`: Y-axis metric (`:differential_BFDR` → -log10(BFDR), or `:differential_posterior`)
 - `legend_pos::Symbol = :topleft`: Legend position
 - `x_clip::Union{Float64,Nothing} = nothing`: X-axis half-width. When `nothing` (default),
   limits are set to the 0.5th–99.5th percentile of the data for a readable range. When a
@@ -35,7 +35,7 @@ plt3 = differential_volcano_plot(diff, x_clip = 4.0)
 function differential_volcano_plot(
     diff::DifferentialResult;
     x_axis::Symbol = :log10_dbf,
-    y_axis::Symbol = :differential_q,
+    y_axis::Symbol = :differential_BFDR,
     legend_pos::Symbol = :topleft,
     x_clip::Union{Float64,Nothing} = nothing
 )
@@ -61,14 +61,14 @@ function differential_volcano_plot(
     end
 
     # Y-axis values
-    if y_axis == :differential_q
-        y_vals = [ismissing(q) ? 0.0 : -log10(max(Float64(q), eps(Float64))) for q in df_s.differential_q]
-        y_label = "-log\u2081\u2080(differential q)"
+    if y_axis == :differential_BFDR
+        y_vals = [ismissing(b) ? 0.0 : -log10(max(Float64(b), eps(Float64))) for b in df_s.differential_BFDR]
+        y_label = "-log\u2081\u2080(differential BFDR)"
     elseif y_axis == :differential_posterior
         y_vals = Float64.(df_s.differential_posterior)
         y_label = "P(differential | data)"
     else
-        throw(ArgumentError("y_axis must be :differential_q or :differential_posterior, got :$y_axis"))
+        throw(ArgumentError("y_axis must be :differential_BFDR or :differential_posterior, got :$y_axis"))
     end
 
     # Filter valid (finite) entries
@@ -174,8 +174,8 @@ function differential_volcano_plot(
     end
 
     # Reference lines
-    if y_axis == :differential_q
-        q_line = -log10(diff.config.q_threshold)
+    if y_axis == :differential_BFDR
+        q_line = -log10(diff.config.bfdr_threshold)
         StatsPlots.hline!(plt, [q_line], label = nothing, color = :black, linestyle = :dash, linewidth = 0.8)
     end
 

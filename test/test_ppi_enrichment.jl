@@ -17,12 +17,12 @@ function create_mock_network_for_enrichment()
         Protein = ["HTT", "HAP40", "CCT2", "CCT5", "CCT7", "TCP1", "VCP"],
         PosteriorProbability = [0.99, 0.95, 0.92, 0.88, 0.85, 0.80, 0.75],
         BayesFactor = [500.0, 200.0, 100.0, 80.0, 60.0, 40.0, 20.0],
-        q_value = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01, 0.02],
+        BFDR = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01, 0.02],
         mean_log2FC = [5.0, 4.5, 3.8, 3.2, 2.8, 2.5, 2.0]
     )
 
     ar = NetworkAnalysisResult(mock_results, bait_protein="HTT", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
     return net
 end
 
@@ -32,7 +32,7 @@ end
 
 @testitem "Bayesian weight: score 0 returns near prior" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     # Access internal function via the extension module
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
@@ -47,7 +47,7 @@ end
 
 @testitem "Bayesian weight: score ~1.0 returns near 1.0" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_weight = ext._compute_prey_prey_weight
@@ -60,7 +60,7 @@ end
 
 @testitem "Bayesian weight: score 0.7 returns reasonable value" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_weight = ext._compute_prey_prey_weight
@@ -73,7 +73,7 @@ end
 
 @testitem "Bayesian weight: monotonicity" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_weight = ext._compute_prey_prey_weight
@@ -90,7 +90,7 @@ end
 
 @testitem "Bayesian weight: higher prior increases posterior" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_weight = ext._compute_prey_prey_weight
@@ -103,7 +103,7 @@ end
 
 @testitem "Per-channel weight computation" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_channels = ext._compute_prey_prey_weight_channels
@@ -122,7 +122,7 @@ end
 
 @testitem "Per-channel weight: empty channels" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     compute_channels = ext._compute_prey_prey_weight_channels
@@ -142,7 +142,7 @@ end
 
 @testitem "Cache key determinism" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     cache_key = ext._cache_key
@@ -168,7 +168,7 @@ end
 
 @testitem "Form encoding" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     form_encode = ext._form_encode
@@ -219,7 +219,7 @@ end
 
 @testitem "enrich_network: empty network returns unchanged" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     # Build empty network
@@ -227,11 +227,11 @@ end
         Protein = ["A"],
         PosteriorProbability = [0.1],  # Below threshold
         BayesFactor = [0.5],
-        q_value = [0.5],
+        BFDR = [0.5],
         mean_log2FC = [0.1]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="Bait")
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
 
     # Should return without error even for empty network
     result = enrich_network(net, species=9606, verbose=false)
@@ -240,18 +240,18 @@ end
 
 @testitem "enrich_network: single prey returns with edge_source" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     mock_results = DataFrame(
         Protein = ["PreyA"],
         PosteriorProbability = [0.95],
         BayesFactor = [100.0],
-        q_value = [0.001],
+        BFDR = [0.001],
         mean_log2FC = [3.0]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="Bait", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
 
     # Only 1 prey — no prey-prey possible, should return with edge_source
     result = enrich_network(net, species=9606, verbose=false)
@@ -260,18 +260,18 @@ end
 
 @testitem "enrich_network: parameter validation" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     mock_results = DataFrame(
         Protein = ["A", "B"],
         PosteriorProbability = [0.95, 0.90],
         BayesFactor = [100.0, 50.0],
-        q_value = [0.001, 0.01],
+        BFDR = [0.001, 0.01],
         mean_log2FC = [3.0, 2.5]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="Bait", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
 
     # Invalid network_type
     @test_throws ErrorException enrich_network(net, network_type=:invalid, verbose=false)
@@ -287,18 +287,18 @@ end
 
 @testitem "edge_source_summary: basic network" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     mock_results = DataFrame(
         Protein = ["A", "B", "C"],
         PosteriorProbability = [0.95, 0.90, 0.85],
         BayesFactor = [100.0, 50.0, 20.0],
-        q_value = [0.001, 0.01, 0.02],
+        BFDR = [0.001, 0.01, 0.02],
         mean_log2FC = [3.0, 2.5, 2.0]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="Bait", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
 
     ext = Base.get_extension(BayesInteractomics, :BayesInteractomicsNetworkExt)
     summary = ext.edge_source_summary(net)
@@ -314,7 +314,7 @@ end
 
 @testitem "STRING API: query real proteins" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     if get(ENV, "BAYESINTERACTOMICS_TEST_NETWORK", "false") != "true"
@@ -336,7 +336,7 @@ end
 
 @testitem "STRING API: full enrichment pipeline" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     if get(ENV, "BAYESINTERACTOMICS_TEST_NETWORK", "false") != "true"
@@ -349,11 +349,11 @@ end
         Protein = ["TP53", "MDM2", "MDM4", "CDKN1A", "BAX", "BCL2"],
         PosteriorProbability = [0.99, 0.95, 0.92, 0.88, 0.85, 0.80],
         BayesFactor = [500.0, 200.0, 100.0, 80.0, 60.0, 40.0],
-        q_value = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01],
+        BFDR = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01],
         mean_log2FC = [5.0, 4.5, 3.8, 3.2, 2.8, 2.5]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="TP53", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
 
     # Run enrichment with real STRING API — use low threshold for testing
     enriched = enrich_network(net,
@@ -399,7 +399,7 @@ end
 
 @testitem "STRING API: enriched network export" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
     using DataFrames
 
     if get(ENV, "BAYESINTERACTOMICS_TEST_NETWORK", "false") != "true"
@@ -411,11 +411,11 @@ end
         Protein = ["HTT", "HAP40", "CCT2", "CCT5", "CCT7", "TCP1", "VCP"],
         PosteriorProbability = [0.99, 0.95, 0.92, 0.88, 0.85, 0.80, 0.75],
         BayesFactor = [500.0, 200.0, 100.0, 80.0, 60.0, 40.0, 20.0],
-        q_value = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01, 0.02],
+        BFDR = [0.0001, 0.001, 0.002, 0.005, 0.008, 0.01, 0.02],
         mean_log2FC = [5.0, 4.5, 3.8, 3.2, 2.8, 2.5, 2.0]
     )
     ar = NetworkAnalysisResult(mock_results, bait_protein="HTT", bait_index=1)
-    net = build_network(ar, posterior_threshold=0.5, q_threshold=0.05)
+    net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.05)
     enriched = enrich_network(net, species=9606, min_string_score=400, verbose=false)
 
     # Export to GraphML and verify edge_source attribute
@@ -446,7 +446,7 @@ end
 
 @testitem "STRING API: cache operations" begin
     using BayesInteractomics
-    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
+    using Graphs, SimpleWeightedGraphs, GraphPlot, Compose, Cairo
 
     if get(ENV, "BAYESINTERACTOMICS_TEST_NETWORK", "false") != "true"
         @test true  # Skip silently

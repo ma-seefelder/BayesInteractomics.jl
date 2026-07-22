@@ -1,0 +1,28 @@
+{
+    "model": "logistic_regression",
+    "fitted_on": "Genz et al. 2025 AF3 benchmark (1265 models, DockQ >= 0.23)",
+    "c2qscore_variant": "4-metric (no VoroIF)",
+    "coefficients": {
+        "coef": 8.7486,
+        "intercept": -2.3721
+    },
+    "c2qscore_weights": {
+        "iplddt": -0.036,
+        "ipae": 0.169,
+        "ptm": 0.335,
+        "iptm": 0.683
+    },
+    "c2qscore_bias": -0.331,
+    "normalization": {
+        "iplddt": "divide by 100",
+        "ipae": "1 - (raw / 31.75)",
+        "ptm": "as-is",
+        "iptm": "as-is"
+    },
+    "performance": {
+        "auc_roc": 0.9289,
+        "auc_pr": 0.9782,
+        "log_loss": 0.2344
+    },
+    "base_rate": 0.15
+}

@@ -1,11 +1,15 @@
 """
-    BayesFactorHBM(result::HBMResult; threshold::Float64 = 0.0)
+    BayesFactorHBM(result::HBMResultMultipleProtocols; threshold::Float64 = 0.0)
+    BayesFactorHBM(result::HBMResultSingleProtocol; threshold::Float64 = 0.0)
 
 Compute the Bayes factor for each parameter's log₂ fold change between the posterior and prior
 from a hierarchical Bayesian model (HBM).
 
+Dispatches on concrete HBMResult subtypes. The field access is identical for both types,
+but concrete dispatch ensures type stability and mirrors the BayesFactorRegression pattern.
+
 # Arguments
-- `result`: An `HBMResult` object containing posterior and prior inference results.
+- `result`: An `HBMResultMultipleProtocols` or `HBMResultSingleProtocol` object.
 - `threshold`: The log₂FC threshold for hypothesis testing (default = 0.0).
 
 # Returns
@@ -13,33 +17,42 @@ from a hierarchical Bayesian model (HBM).
   representing Bayes factors, posterior probability and prior probability.
 """
 function BayesFactorHBM(
-    result::HBMResult;
+    result::HBMResultMultipleProtocols;
     threshold::Float64 = 0.0
 )
-    # retrieve posterior and prior
     posterior = result.posterior
     prior = result.prior
-
-    # Extract relevant posteriors
     posterior_control = posterior.posteriors[:μ_control]
     posterior_sample  = posterior.posteriors[:μ_sample]
     prior_control     = prior.posteriors[:μ_control]
     prior_sample      = prior.posteriors[:μ_sample]
-
-    # Compute log₂ fold change distributions
     posterior_log2FC = log2FC.(posterior_sample, posterior_control)
     prior_log2FC     = log2FC.(prior_sample, prior_control)
+    return calculate_bayes_factor(posterior_log2FC, prior_log2FC; threshold = threshold)
+end
 
+function BayesFactorHBM(
+    result::HBMResultSingleProtocol;
+    threshold::Float64 = 0.0
+)
+    posterior = result.posterior
+    prior = result.prior
+    posterior_control = posterior.posteriors[:μ_control]
+    posterior_sample  = posterior.posteriors[:μ_sample]
+    prior_control     = prior.posteriors[:μ_control]
+    prior_sample      = prior.posteriors[:μ_sample]
+    posterior_log2FC = log2FC.(posterior_sample, posterior_control)
+    prior_log2FC     = log2FC.(prior_sample, prior_control)
     return calculate_bayes_factor(posterior_log2FC, prior_log2FC; threshold = threshold)
 end
 
 
 """
-    BayesFactorRegression(result::RegressionResultMultipleProtocols)
+    BayesFactorRegression(result::RegressionResultMultipleProtocols; threshold=0.0)
 
-    Computes the Bayes factor for a given posterior and prior inference results. 
-        H1: ρ > 0.0
-        H0: ρ <= 0.0
+    Computes the Bayes factor for a given posterior and prior inference results.
+        H1: slope > threshold
+        H0: slope <= threshold
 
     Args:
         - posterior<:InferenceResult:   posterior inference result object of type InferenceResult 
@@ -50,51 +63,61 @@ end
         - posterior probability
         - prior probability
 """
-function BayesFactorRegression(result::RegressionResultMultipleProtocols; threshold = 0.3)
+function BayesFactorRegression(result::RegressionResultMultipleProtocols; threshold = 0.0, jzs_r_scale::Float64 = 0.0, min_posterior_var::Float64 = 0.0)
     posterior = result.posterior.posteriors
     prior = result.prior.posteriors
 
     posterior_slopes = posterior[:α]
     prior_slopes     = prior[:α]
 
+    bayes_factor, p_post, p_prior = calculate_bayes_factor(posterior_slopes, prior_slopes; threshold = threshold, min_posterior_var = min_posterior_var)
 
-    bayes_factor, p_post, p_prior = calculate_bayes_factor(posterior_slopes, prior_slopes; threshold = threshold)
+    # global slope μ_α — compute from the hierarchical hyper-mean, not per-protocol slopes
+    # When using JZS prior, use analytical Cauchy CDF for the prior probability on μ_α
+    prior_p_override = jzs_r_scale > 0.0 ? _cauchy_sf(threshold, jzs_r_scale) : nothing
+    bf_μ_α, p_post_μ_α, p_prior_μ_α = calculate_bayes_factor(
+        [posterior[:μ_α]], [prior[:μ_α]]; threshold = threshold, prior_p_override = prior_p_override, min_posterior_var = min_posterior_var)
 
-    # global slope μ_α
-    p_post_μ_α = 1.0 - cdf(to_normal(posterior[:μ_α]), threshold)
-    p_prior_μ_α = 1.0 - cdf(to_normal(prior[:μ_α]), threshold)
-
-    bf_μ_α,  p_post_μ_α, p_prior_μ_α = calculate_bayes_factor(posterior_slopes, prior_slopes; threshold = threshold) 
-    
-    # prepend the BF, posterior and priorprobability of the global slope 
-    prepend!(bayes_factor, bf_μ_α)
-    prepend!(p_post, p_post_μ_α)
-    prepend!(p_prior, p_prior_μ_α)
+    # prepend the BF, posterior and prior probability of the global slope
+    prepend!(bayes_factor, bf_μ_α[1])
+    prepend!(p_post, p_post_μ_α[1])
+    prepend!(p_prior, p_prior_μ_α[1])
 
     return bayes_factor, p_post, p_prior
 end
 
-function BayesFactorRegression(result::RegressionResultSingleProtocol; threshold = 0.3)
+function BayesFactorRegression(result::RegressionResultSingleProtocol; threshold = 0.0, jzs_r_scale::Float64 = 0.0, min_posterior_var::Float64 = 0.0)
     posterior = result.posterior.posteriors
     prior = result.prior.posteriors
 
     posterior_slope = posterior[:α]
     prior_slope     = prior[:α]
 
-    return calculate_bayes_factor(posterior_slope, prior_slope; threshold = threshold)
+    # When using JZS prior, use analytical Cauchy CDF for the prior probability
+    prior_p_override = jzs_r_scale > 0.0 ? _cauchy_sf(threshold, jzs_r_scale) : nothing
+    return calculate_bayes_factor(posterior_slope, prior_slope; threshold = threshold, prior_p_override = prior_p_override, min_posterior_var = min_posterior_var)
 end
 
 # Robust regression dispatches: delegate to normal equivalents since posterior
 # structure for α, β, σ is identical (w is marginalized out in BF computation)
-BayesFactorRegression(r::RobustRegressionResultMultipleProtocols; threshold = 0.3) =
-    BayesFactorRegression(RegressionResultMultipleProtocols(r.posterior, r.prior); threshold=threshold)
+BayesFactorRegression(r::RobustRegressionResultMultipleProtocols; threshold = 0.0, jzs_r_scale::Float64 = 0.0, min_posterior_var::Float64 = 0.0) =
+    BayesFactorRegression(RegressionResultMultipleProtocols(r.posterior, r.prior); threshold=threshold, jzs_r_scale=jzs_r_scale, min_posterior_var=min_posterior_var)
 
-BayesFactorRegression(r::RobustRegressionResultSingleProtocol; threshold = 0.3) =
-    BayesFactorRegression(RegressionResultSingleProtocol(r.posterior, r.prior); threshold=threshold)
+BayesFactorRegression(r::RobustRegressionResultSingleProtocol; threshold = 0.0, jzs_r_scale::Float64 = 0.0, min_posterior_var::Float64 = 0.0) =
+    BayesFactorRegression(RegressionResultSingleProtocol(r.posterior, r.prior); threshold=threshold, jzs_r_scale=jzs_r_scale, min_posterior_var=min_posterior_var)
 
 
 """
-    calculate_bayes_factor(posterior, prior; threshold = 0.0)
+    _cauchy_sf(threshold, r)
+
+Survival function P(X > threshold) for a Cauchy(0, r) distribution.
+Used for analytical prior probability in JZS Bayes factor computation.
+"""
+_cauchy_sf(threshold::Real, r::Real) = 0.5 - atan(threshold / r) / π
+
+
+"""
+    calculate_bayes_factor(posterior, prior; threshold = 0.0, prior_p_override = nothing, min_posterior_var = 0.0)
 
 Compute Bayes factors comparing posterior vs. prior probability of exceeding a given threshold.
 
@@ -102,21 +125,65 @@ Compute Bayes factors comparing posterior vs. prior probability of exceeding a g
 - `posterior`: A vector of distributions (assumed Normal-like).
 - `prior`: A vector of distributions (assumed Normal-like).
 - `threshold`: The threshold above which probability is computed (default = 0.0).
+- `prior_p_override`: If not `nothing`, use this value as P(x > threshold | prior) for ALL
+  parameters instead of computing from the VMP prior. Used for JZS prior where the true
+  prior is Cauchy but VMP approximates it as Normal.
+- `min_posterior_var`: Minimum variance floor for posterior distributions (default = 0.0,
+  i.e., no floor). VMP posteriors can be over-confident (extremely narrow σ), causing
+  P(slope>0) to saturate at 0 or 1 and BFs to hit ±max_bf clamp. Setting e.g. 0.01
+  ensures min posterior std = 0.1, restoring BF gradation.
 
 # Returns
 - `bayes_factor::Vector{Float64}`: The Bayes factor per parameter.
 - `p_post::Vector{Float64}`: Posterior probability `P(x > threshold)`.
 - `p_prior::Vector{Float64}`: Prior probability `P(x > threshold)`.
 """
-function calculate_bayes_factor(posterior, prior; threshold = 0.0)
-    ϵ = eps(Float64)
-    p_post  = 1 .- cdf.(to_normal.(posterior), threshold)
-    p_prior = 1 .- cdf.(to_normal.(prior), threshold)
-    
-    prior_odds     = @. p_prior / max(1 - p_prior, ϵ)
-    posterior_odds = @. p_post  / max(1 - p_post,  ϵ)
-    
-    bayes_factor    = posterior_odds ./ prior_odds    
+function calculate_bayes_factor(posterior, prior; threshold = 0.0, max_bf = 1e6,
+                                prior_p_override::Union{Nothing, Float64} = nothing,
+                                min_posterior_var::Float64 = 0.0)
+    post_normals = to_normal.(posterior)
+
+    # Ensure post_normals is always a vector (single-protocol returns scalar Normal)
+    if post_normals isa Normal
+        post_normals = [post_normals]
+    end
+
+    # Apply posterior variance floor: VMP posteriors can be over-confident
+    # (extremely narrow σ), causing P(slope>0) ≈ 0 or 1 and saturating BFs
+    # at ±max_bf. The floor ensures minimum uncertainty is preserved.
+    if min_posterior_var > 0.0
+        min_std = sqrt(min_posterior_var)
+        post_normals = [Normal(mean(d), max(std(d), min_std)) for d in post_normals]
+    end
+
+    p_post  = 1 .- cdf.(post_normals, threshold)
+
+    # Use analytical prior probability when available (JZS Cauchy prior)
+    p_prior = if isnothing(prior_p_override)
+        prior_normals = to_normal.(prior)
+        if prior_normals isa Normal
+            prior_normals = [prior_normals]
+        end
+        1 .- cdf.(prior_normals, threshold)
+    else
+        fill(prior_p_override, length(p_post))
+    end
+
+    # Clamp probabilities away from 0 and 1 to avoid Inf in log-odds.
+    # Using 1e-12 (not eps(Float64) ≈ 2.2e-16) so that the maximum
+    # representable odds ≈ 1e12, well within Float64 range.
+    ϵ = 1e-12
+    p_post_c  = clamp.(p_post,  ϵ, 1 - ϵ)
+    p_prior_c = clamp.(p_prior, ϵ, 1 - ϵ)
+
+    # Compute log Bayes factor via log-odds difference (avoids overflow)
+    log_bf = @. (log(p_post_c) - log1p(-p_post_c)) - (log(p_prior_c) - log1p(-p_prior_c))
+
+    # Cap: individual BFs beyond max_bf are numerical artifacts, not real evidence
+    max_log_bf = log(max_bf)
+    log_bf     = clamp.(log_bf, -max_log_bf, max_log_bf)
+
+    bayes_factor = exp.(log_bf)
     return bayes_factor, p_post, p_prior
 end
 
@@ -317,8 +384,6 @@ function RegressionStatistics(result::RegressionResultMultipleProtocols; α::Flo
         :credible_interval_protocol => ci_protocol
     )
 end
-
-using Statistics, Distributions # Add this line to your script for the example to work
 
 """
     RegressionStatistics(result::RegressionResultSingleProtocol; α::Float64 = 0.95)

@@ -24,13 +24,13 @@ function BayesInteractomics.run_network_analysis(
         mkpath(config.output_dir)
     end
 
-    config.verbose && @info "Building network (posterior ≥ $(config.posterior_threshold), q ≤ $(config.q_threshold))"
+    config.verbose && @info "Building network (posterior ≥ $(config.posterior_threshold), BFDR ≤ $(config.bfdr_threshold))"
 
     # --- 1. Build network ---
     net = BayesInteractomics.build_network(ar;
         posterior_threshold = config.posterior_threshold,
         bf_threshold = config.bf_threshold,
-        q_threshold = config.q_threshold,
+        bfdr_threshold = config.bfdr_threshold,
         log2fc_threshold = config.log2fc_threshold,
         include_bait = config.include_bait,
         weight_by = config.weight_by
@@ -359,8 +359,8 @@ function _validate_config(config::BayesInteractomics.NetworkConfig)
     config.posterior_threshold >= 0.0 && config.posterior_threshold <= 1.0 ||
         error("posterior_threshold must be in [0, 1], got $(config.posterior_threshold)")
 
-    config.q_threshold >= 0.0 && config.q_threshold <= 1.0 ||
-        error("q_threshold must be in [0, 1], got $(config.q_threshold)")
+    config.bfdr_threshold >= 0.0 && config.bfdr_threshold <= 1.0 ||
+        error("bfdr_threshold must be in [0, 1], got $(config.bfdr_threshold)")
 end
 
 # ============================================================
@@ -376,7 +376,7 @@ function _report_parameters!(io::IOBuffer, cfg::BayesInteractomics.NetworkConfig
     println(io, "|-----------|-------|")
     println(io, "| Posterior threshold | $(cfg.posterior_threshold) |")
     println(io, "| Bayes factor threshold | $(isnothing(cfg.bf_threshold) ? "none" : cfg.bf_threshold) |")
-    println(io, "| Q-value threshold | $(cfg.q_threshold) |")
+    println(io, "| BFDR threshold | $(cfg.bfdr_threshold) |")
     println(io, "| log2FC threshold | $(isnothing(cfg.log2fc_threshold) ? "none" : cfg.log2fc_threshold) |")
     println(io, "| Include bait | $(cfg.include_bait) |")
     println(io, "| Edge weight | $(cfg.weight_by) |")

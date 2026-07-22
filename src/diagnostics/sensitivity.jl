@@ -36,6 +36,7 @@ function sensitivity_analysis(
     n_samples::Int = 0,
     refID::Int = 1,
     H0_file::String = "copula_H0.xlsx",
+    h0_cache_file::String = "",
     combination_method::Symbol = ar.combination_method,
     lc_n_iterations::Int = 100,
     lc_convergence_tol::Float64 = 1e-6,
@@ -43,6 +44,19 @@ function sensitivity_analysis(
 )
     # Extract baseline BFs from the analysis result (filtered protein subset)
     cr = ar.copula_results
+    # Filter to detected proteins only AND drop rows with missing BFs.
+    # `is_detected` reflects data-level detection; `bf_*` columns are only filled
+    # for proteins that survived HBM/regression inference. A protein can be
+    # detected but have missing BFs (inference failure), and Vector{Float64}(...)
+    # would then throw `MethodError(convert, (Float64, missing))`.
+    if hasproperty(cr, :is_detected)
+        cr = filter(r -> coalesce(r.is_detected, false), cr)
+    end
+    cr = filter(
+        r -> !ismissing(r.bf_enrichment) && !ismissing(r.bf_correlation) &&
+             !ismissing(r.bf_detected) && !ismissing(r.posterior_prob) && !ismissing(r.BF),
+        cr,
+    )
     protein_names = Vector{String}(cr.Protein)
     n_proteins = length(protein_names)
 
@@ -55,95 +69,296 @@ function sensitivity_analysis(
     # so we must align the recomputed BB BFs to the filtered protein set.
     all_protein_ids = getIDs(data)
 
-    # Build the list of prior settings and compute posteriors for each
+    # Extract the baseline H1 family from the analysis result to fix it across all
+    # sensitivity sweep iterations. Without this, different prior settings can cause
+    # different EM restarts to win, selecting different H1 families (Gamma/LogNormal/
+    # Weibull) which dominates the apparent prior sensitivity.
+    baseline_h1_family = nothing
+    if combination_method in (:latent_class, :bma) && ar.latent_class_result !== nothing
+        baseline_h1_family = ar.latent_class_result.h1_enrichment_family
+        verbose && @info "Fixing H1 family to baseline: $baseline_h1_family"
+    elseif combination_method in (:latent_class, :bma) && ar.bma_result !== nothing
+        baseline_h1_family = ar.bma_result.em3c_result.h1_enrichment_family
+        verbose && @info "Fixing H1 family to BMA baseline: $baseline_h1_family"
+    end
+
+    # Run the stage-1 EM once (shared across all sweep iterations for copula/bma modes)
+    phase1_precomputed = nothing
+    h0_precomputed = nothing
+    if combination_method in (:copula, :bma)
+        phase1_precomputed = combined_BF_latent_class(
+            BayesFactorTriplet(bf_enrichment, bf_correlation, bf_detected_baseline),
+            refID; verbose=verbose, return_responsibilities=true)
+        h0_precomputed = precompute_h0(
+            BayesFactorTriplet(bf_enrichment, bf_correlation, bf_detected_baseline),
+            phase1_precomputed; verbose=verbose
+        )
+    end
+
+    # Build the list of prior settings and compute posteriors for each.
+    # First entry is always the actual baseline from the completed analysis.
     prior_settings = PriorSetting[]
     posterior_columns = Vector{Float64}[]
     bf_columns = Vector{Float64}[]
-    q_columns = Vector{Float64}[]
-    baseline_index = 0
+    bfdr_columns = Vector{Float64}[]
+
+    # Insert baseline from the analysis result as the first column
+    baseline_posterior = Vector{Float64}(cr.posterior_prob)
+    baseline_bf = Vector{Float64}(cr.BF)
+    baseline_bfdr = bfdr(baseline_bf)
+    push!(prior_settings, PriorSetting(:baseline, "Baseline", (;)))
+    push!(posterior_columns, baseline_posterior)
+    push!(bf_columns, baseline_bf)
+    push!(bfdr_columns, baseline_bfdr)
+    baseline_index = 1
 
     # ------------------------------------------------------------------ #
-    # 1. Beta-Bernoulli prior sweep
+    # 1. Beta-Bernoulli prior sweep (optional — disabled by default)
     # ------------------------------------------------------------------ #
-    for (α, β) in config.bb_priors
-        label = "BB($(α),$(β))"
-        push!(prior_settings, PriorSetting(:betabernoulli, label, (α=α, β=β)))
+    # The main pipeline uses a fixed BB prior (3,3) that is not user-configurable,
+    # so sweeping BB priors measures hypothetical sensitivity rather than actual
+    # uncertainty. Enable by passing bb_priors in SensitivityConfig.
+    bb_priors = config.bb_priors
+    n_bb = length(bb_priors)
 
-        # Track baseline (default prior)
-        if α == 3.0 && β == 3.0
-            baseline_index = length(prior_settings)
+    if n_bb > 0
+        bb_n_restarts = combination_method == :latent_class ? 10 : 20
+        bb_results = Vector{Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}}(undef, n_bb)
+        bb_prior_settings = Vector{PriorSetting}(undef, n_bb)
+
+        verbose && @info "BB prior sweep: running $n_bb settings in parallel..."
+
+        # Pre-compute all BB detection BF vectors
+        bb_bf_d_list = Vector{Vector{Float64}}(undef, n_bb)
+        for (idx, (α, β)) in enumerate(bb_priors)
+            bf_d_full = _recompute_bb_bf(data, n_controls, n_samples; prior_alpha=α, prior_beta=β)
+            bf_lookup = Dict(all_protein_ids[i] => bf_d_full[i] for i in eachindex(all_protein_ids))
+            bb_bf_d_list[idx] = [get(bf_lookup, name, 0.0) for name in protein_names]
         end
 
-        # Recompute BB Bayes factors for ALL proteins, then filter to copula_results subset
-        bf_d_full = _recompute_bb_bf(data, n_controls, n_samples; prior_alpha=α, prior_beta=β)
-        bf_lookup = Dict(all_protein_ids[i] => bf_d_full[i] for i in eachindex(all_protein_ids))
-        bf_d = [get(bf_lookup, name, 0.0) for name in protein_names]
+        # Parallel evidence recombination across BB settings
+        bb_tasks = map(1:n_bb) do idx
+            Threads.@spawn begin
+                (α, β) = bb_priors[idx]
+                bf_d = bb_bf_d_list[idx]
+                _recombine_evidence(
+                    bf_enrichment, bf_correlation, bf_d, refID;
+                    combination_method = combination_method,
+                    H0_file = H0_file,
+                    lc_n_iterations = lc_n_iterations,
+                    lc_convergence_tol = lc_convergence_tol,
+                    verbose = false,
+                    precomputed_h0 = h0_precomputed,
+                    phase1_result = phase1_precomputed,
+                    n_restarts = bb_n_restarts,
+                    force_h1_family = baseline_h1_family
+                )
+            end
+        end
 
-        # Recombine evidence with the new detection BFs
-        bf, posterior, q_vals = _recombine_evidence(
-            bf_enrichment, bf_correlation, bf_d, refID;
-            combination_method = combination_method,
-            H0_file = H0_file,
-            lc_n_iterations = lc_n_iterations,
-            lc_convergence_tol = lc_convergence_tol,
-            verbose = verbose
-        )
+        for (idx, (α, β)) in enumerate(bb_priors)
+            label = "BB($(α),$(β))"
+            bb_prior_settings[idx] = PriorSetting(:betabernoulli, label, (α=α, β=β))
+            bb_results[idx] = fetch(bb_tasks[idx])
+        end
 
-        push!(posterior_columns, posterior)
-        push!(bf_columns, bf)
-        push!(q_columns, q_vals)
+        for idx in 1:n_bb
+            push!(prior_settings, bb_prior_settings[idx])
+            bf, posterior, bfdr_vals = bb_results[idx]
+            push!(posterior_columns, posterior)
+            push!(bf_columns, bf)
+            push!(bfdr_columns, bfdr_vals)
+        end
     end
 
     # ------------------------------------------------------------------ #
-    # 2. Copula-EM prior sweep (only for copula mode)
+    # 2. Copula-EM prior sweep (only for copula mode, parallel)
     # ------------------------------------------------------------------ #
     if combination_method == :copula
-        for em_prior in config.em_prior_grid
-            expected = round(em_prior.α / (em_prior.α + em_prior.β), digits=3)
-            label = "EM(α=$(em_prior.α),β=$(em_prior.β),E[π₁]=$(expected))"
-            push!(prior_settings, PriorSetting(:copula_em, label, (α=em_prior.α, β=em_prior.β)))
+        em_priors = config.em_prior_grid
+        n_em = length(em_priors)
+        em_results = Vector{Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}}(undef, n_em)
 
-            bf, posterior, q_vals = _recombine_evidence(
+        verbose && @info "Copula-EM prior sweep: running $n_em settings in parallel..."
+
+        em_tasks = map(1:n_em) do idx
+            em_prior = em_priors[idx]
+            Threads.@spawn _recombine_evidence(
                 bf_enrichment, bf_correlation, bf_detected_baseline, refID;
                 combination_method = :copula,
                 H0_file = H0_file,
                 em_prior = em_prior,
-                verbose = verbose
+                verbose = false,
+                precomputed_h0 = h0_precomputed,
+                phase1_result = phase1_precomputed
             )
+        end
 
+        for idx in 1:n_em
+            em_prior = em_priors[idx]
+            expected = round(em_prior.α / (em_prior.α + em_prior.β), digits=3)
+            label = "EM(α=$(em_prior.α),β=$(em_prior.β),E[π₁]=$(expected))"
+            push!(prior_settings, PriorSetting(:copula_em, label, (α=em_prior.α, β=em_prior.β)))
+            em_results[idx] = fetch(em_tasks[idx])
+            bf, posterior, bfdr_vals = em_results[idx]
             push!(posterior_columns, posterior)
             push!(bf_columns, bf)
-            push!(q_columns, q_vals)
+            push!(bfdr_columns, bfdr_vals)
         end
     end
 
     # ------------------------------------------------------------------ #
-    # 3. Latent class prior sweep (only for latent_class mode)
+    # 3. Latent class prior sweep (only for latent_class mode, parallel)
     # ------------------------------------------------------------------ #
     if combination_method == :latent_class
-        for lc_prior in config.lc_alpha_prior_grid
-            label = "LC(α=[$(join(lc_prior, ","))])"
-            push!(prior_settings, PriorSetting(:latent_class, label, (alpha_prior=lc_prior,)))
+        lc_priors = config.lc_alpha_prior_grid
+        n_lc = length(lc_priors)
+        lc_results = Vector{Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}}(undef, n_lc)
 
-            bf, posterior, q_vals = _recombine_evidence(
+        verbose && @info "LC prior sweep: running $n_lc settings in parallel (n_restarts=20)..."
+
+        lc_tasks = map(1:n_lc) do idx
+            lc_prior = lc_priors[idx]
+            Threads.@spawn _recombine_evidence(
                 bf_enrichment, bf_correlation, bf_detected_baseline, refID;
                 combination_method = :latent_class,
                 lc_alpha_prior = lc_prior,
                 lc_n_iterations = lc_n_iterations,
                 lc_convergence_tol = lc_convergence_tol,
-                verbose = verbose
+                verbose = false,
+                n_restarts = 20,
+                force_h1_family = baseline_h1_family
             )
+        end
 
+        for idx in 1:n_lc
+            lc_prior = lc_priors[idx]
+            label = "LC(α=[$(join(lc_prior, ","))])"
+            push!(prior_settings, PriorSetting(:latent_class, label, (alpha_prior=lc_prior,)))
+            lc_results[idx] = fetch(lc_tasks[idx])
+            bf, posterior, bfdr_vals = lc_results[idx]
             push!(posterior_columns, posterior)
             push!(bf_columns, bf)
-            push!(q_columns, q_vals)
+            push!(bfdr_columns, bfdr_vals)
         end
     end
 
-    # If no baseline found (BB(3,3) not in grid), use the first setting
-    if baseline_index == 0
-        baseline_index = 1
+    # ------------------------------------------------------------------ #
+    # 3.5  BMA Cartesian sweep: LC grid x copula EM grid
+    # ------------------------------------------------------------------ #
+    if combination_method == :bma
+        lc_priors = config.lc_alpha_prior_grid
+        em_priors = config.em_prior_grid
+        n_lc = length(lc_priors)
+        n_em = length(em_priors)
+
+        verbose && @info "BMA sensitivity sweep: $(n_lc) LC x $(n_em) EM = $(n_lc * n_em) grid points"
+
+        # Stage 1: Run LC once per LC prior (reused across copula EM variants).
+        lc_results_bma = Vector{Any}(undef, n_lc)
+        lc_tasks_bma = map(1:n_lc) do idx
+            lc_prior = lc_priors[idx]
+            Threads.@spawn combined_BF_latent_class(
+                BayesFactorTriplet(bf_enrichment, bf_correlation, bf_detected_baseline),
+                refID;
+                alpha_prior = lc_prior,
+                n_iterations = lc_n_iterations,
+                convergence_tol = lc_convergence_tol,
+                verbose = false,
+                n_restarts = 20,
+                force_h1_family = baseline_h1_family
+            )
+        end
+        for idx in 1:n_lc
+            lc_results_bma[idx] = fetch(lc_tasks_bma[idx])
+        end
+
+        # Stage 2: For each (LC, EM) pair, run copula with that LC as the stage-1 result + EM prior override,
+        # then compute fresh stacking weights.
+        triplet = BayesFactorTriplet(bf_enrichment, bf_correlation, bf_detected_baseline)
+
+        # Build flat task list for all (lc_idx, em_idx) combinations
+        bma_task_list = Tuple{Int,Int}[]
+        for lc_idx in 1:n_lc, em_idx in 1:n_em
+            push!(bma_task_list, (lc_idx, em_idx))
+        end
+
+        bma_tasks = map(bma_task_list) do (lc_idx, em_idx)
+            Threads.@spawn begin
+                lc_result = lc_results_bma[lc_idx]
+                em_prior = em_priors[em_idx]
+
+                # Convert Beta(alpha,beta) on pi_1 to 3-component Dirichlet for copula EM.
+                # Beta(alpha,beta) encodes E[pi_1] = alpha/(alpha+beta).
+                # Map to Dirichlet[d_H0, d_ag, d_H1] preserving total strength S=alpha+beta:
+                #   d_H1 = alpha  (pseudo-counts for H1)
+                #   d_H0 = beta * 0.7  (70:30 split matches default [5,2,1] ratio)
+                #   d_ag = beta * 0.3
+                d_H1 = em_prior.α
+                d_H0 = em_prior.β * 0.7
+                d_ag = em_prior.β * 0.3
+                copula_dir = [d_H0, d_ag, d_H1]
+
+                cop_result = combined_BF(
+                    triplet, refID;
+                    phase1_result = lc_result,
+                    n_restarts = 5,
+                    verbose = false,
+                    precomputed_h0 = h0_precomputed,
+                    copula_dirichlet_prior = copula_dir
+                )
+
+                # Fresh stacking weights
+                ll_em = pointwise_ll_em(lc_result, triplet; winsorize=false)
+                ll_cop = pointwise_ll_copula(cop_result)
+                w_em_raw, w_cop_raw = stacking_weights(ll_em, ll_cop)
+                weight_floor = 0.05
+                w_em = max(w_em_raw, weight_floor)
+                w_cop = max(w_cop_raw, weight_floor)
+                w_sum = w_em + w_cop
+                w_em /= w_sum
+                w_cop /= w_sum
+
+                # Prior odds from LC mixing weights
+                mw = lc_result.mixing_weights
+                prior_odds = mw[end] / max(sum(mw[1:end-1]), 1e-300)
+
+                # Merge posteriors
+                P_avg, BF_avg, _ = merge_posteriors(
+                    lc_result.bf, cop_result.bf, prior_odds, w_em, w_cop;
+                    bf_triplet = triplet
+                )
+                bfdr_vals = bfdr(BF_avg)
+
+                (BF_avg, P_avg, bfdr_vals, w_em, w_cop)
+            end
+        end
+
+        # Collect results in order
+        for (task_idx, (lc_idx, em_idx)) in enumerate(bma_task_list)
+            lc_prior = lc_priors[lc_idx]
+            em_prior = em_priors[em_idx]
+
+            lc_label = "LC(α=[$(join(round.(lc_prior, digits=2), ","))])"
+            expected_pi1 = round(em_prior.α / (em_prior.α + em_prior.β), digits=3)
+            label = "$(lc_label) | E[π₁]=$(expected_pi1)"
+
+            bf_vec, post_vec, bfdr_vec, w_em_val, w_cop_val = fetch(bma_tasks[task_idx])
+
+            push!(prior_settings, PriorSetting(:bma, label, (
+                alpha_prior = lc_prior,
+                em_alpha = em_prior.α,
+                em_beta = em_prior.β,
+                w_em = w_em_val,
+                w_cop = w_cop_val,
+            )))
+            push!(posterior_columns, post_vec)
+            push!(bf_columns, bf_vec)
+            push!(bfdr_columns, bfdr_vec)
+        end
     end
+
+    # baseline_index is always 1 (the actual analysis result)
 
     # ------------------------------------------------------------------ #
     # 4. Assemble matrices and compute summaries
@@ -151,17 +366,17 @@ function sensitivity_analysis(
     n_settings = length(prior_settings)
     posterior_matrix = hcat(posterior_columns...)  # n_proteins × n_settings
     bf_matrix = hcat(bf_columns...)
-    q_matrix = hcat(q_columns...)
+    bfdr_matrix = hcat(bfdr_columns...)
 
     summary_df = _compute_sensitivity_summary(posterior_matrix, protein_names, baseline_index)
-    stability_df = _compute_classification_stability(posterior_matrix, q_matrix, protein_names)
+    stability_df = _compute_classification_stability(posterior_matrix, bfdr_matrix, protein_names)
 
     return SensitivityResult(
         config,
         prior_settings,
         posterior_matrix,
         bf_matrix,
-        q_matrix,
+        bfdr_matrix,
         protein_names,
         baseline_index,
         summary_df,
@@ -216,18 +431,36 @@ function _recombine_evidence(
     lc_alpha_prior::Vector{Float64} = [10.0, 1.0],
     lc_n_iterations::Int = 100,
     lc_convergence_tol::Float64 = 1e-6,
-    verbose::Bool = false
+    verbose::Bool = false,
+    precomputed_h0::Union{Nothing, PrecomputedH0} = nothing,
+    phase1_result::Union{Nothing, LatentClassResult} = nothing,
+    n_restarts::Int = 20,
+    force_h1_family::Union{Nothing, Symbol} = nothing
 )
     triplet = BayesFactorTriplet(bf_enrichment, bf_correlation, bf_detected)
 
     if combination_method == :copula
-        prior_arg = isnothing(em_prior) ? :default : em_prior
+        # Compute the stage-1 result if not provided
+        p1 = phase1_result
+        if p1 === nothing
+            p1 = combined_BF_latent_class(triplet, refID; verbose=verbose, return_responsibilities=true)
+        end
+        # Convert em_prior Beta(alpha,beta) to copula Dirichlet if provided
+        copula_dir_kw = if em_prior !== nothing
+            d_H1 = em_prior.α
+            d_H0 = em_prior.β * 0.7
+            d_ag = em_prior.β * 0.3
+            [d_H0, d_ag, d_H1]
+        else
+            [5.0, 2.0, 1.0]  # default
+        end
         result = combined_BF(
             triplet, refID;
-            H0_file = H0_file,
-            prior = prior_arg,
+            phase1_result = p1,
             n_restarts = 5,  # reduced restarts for sensitivity sweep
-            verbose = verbose
+            verbose = verbose,
+            precomputed_h0 = precomputed_h0,
+            copula_dirichlet_prior = copula_dir_kw
         )
         bf = result.bf
         posterior = result.posterior_prob
@@ -237,28 +470,65 @@ function _recombine_evidence(
             alpha_prior = lc_alpha_prior,
             n_iterations = lc_n_iterations,
             convergence_tol = lc_convergence_tol,
-            verbose = verbose
+            verbose = verbose,
+            n_restarts = n_restarts,
+            force_h1_family = force_h1_family
         )
         bf = result.bf
         posterior = result.posterior_prob
     elseif combination_method == :bma
-        # For BMA sensitivity sweeps use copula as the base method (full BMA is too slow for a grid)
-        prior_arg = isnothing(em_prior) ? :default : em_prior
-        result = combined_BF(
+        # Full BMA: run LC + copula + stacking
+        lc_result = combined_BF_latent_class(
             triplet, refID;
-            H0_file = H0_file,
-            prior = prior_arg,
-            n_restarts = 5,
-            verbose = verbose
+            alpha_prior = lc_alpha_prior,
+            n_iterations = lc_n_iterations,
+            convergence_tol = lc_convergence_tol,
+            verbose = verbose,
+            n_restarts = n_restarts,
+            force_h1_family = force_h1_family
         )
-        bf = result.bf
-        posterior = result.posterior_prob
+
+        # Convert em_prior Beta(alpha,beta) to copula Dirichlet if provided
+        copula_dir_kw = if em_prior !== nothing
+            d_H1 = em_prior.α
+            d_H0 = em_prior.β * 0.7
+            d_ag = em_prior.β * 0.3
+            [d_H0, d_ag, d_H1]
+        else
+            [5.0, 2.0, 1.0]  # default
+        end
+
+        cop_result = combined_BF(
+            triplet, refID;
+            phase1_result = lc_result,
+            n_restarts = 5,
+            verbose = verbose,
+            precomputed_h0 = precomputed_h0,
+            copula_dirichlet_prior = copula_dir_kw
+        )
+
+        # Stacking weights
+        ll_em = pointwise_ll_em(lc_result, triplet; winsorize=false)
+        ll_cop = pointwise_ll_copula(cop_result)
+        w_em_raw, w_cop_raw = stacking_weights(ll_em, ll_cop)
+        w_em = max(w_em_raw, 0.05)
+        w_cop = max(w_cop_raw, 0.05)
+        w_sum = w_em + w_cop
+        w_em /= w_sum; w_cop /= w_sum
+        mw = lc_result.mixing_weights
+        prior_odds = mw[end] / max(sum(mw[1:end-1]), 1e-300)
+        P_avg, BF_avg, _ = merge_posteriors(
+            lc_result.bf, cop_result.bf, prior_odds, w_em, w_cop;
+            bf_triplet = triplet
+        )
+        bf = BF_avg
+        posterior = P_avg
     else
         error("Unknown combination_method: $combination_method")
     end
 
-    q_vals = q(bf)
-    return bf, posterior, q_vals
+    bfdr_vals = bfdr(bf)
+    return bf, posterior, bfdr_vals
 end
 
 """
@@ -288,14 +558,14 @@ function _compute_sensitivity_summary(
 end
 
 """
-    _compute_classification_stability(posterior_matrix, q_matrix, protein_names) -> DataFrame
+    _compute_classification_stability(posterior_matrix, bfdr_matrix, protein_names) -> DataFrame
 
 Per-protein classification stability: fraction of settings where protein exceeds
-P > 0.5, P > 0.8, P > 0.95, and q < 0.05, q < 0.01.
+P > 0.5, P > 0.8, P > 0.95, and BFDR < 0.05, BFDR < 0.01.
 """
 function _compute_classification_stability(
     posterior_matrix::Matrix{Float64},
-    q_matrix::Matrix{Float64},
+    bfdr_matrix::Matrix{Float64},
     protein_names::Vector{String}
 )
     n_settings = size(posterior_matrix, 2)
@@ -305,9 +575,22 @@ function _compute_classification_stability(
         frac_P_gt_0_5  = vec(sum(posterior_matrix .> 0.5, dims=2)) ./ n_settings,
         frac_P_gt_0_8  = vec(sum(posterior_matrix .> 0.8, dims=2)) ./ n_settings,
         frac_P_gt_0_95 = vec(sum(posterior_matrix .> 0.95, dims=2)) ./ n_settings,
-        frac_q_lt_0_05 = vec(sum(q_matrix .< 0.05, dims=2)) ./ n_settings,
-        frac_q_lt_0_01 = vec(sum(q_matrix .< 0.01, dims=2)) ./ n_settings
+        frac_BFDR_lt_0_05 = vec(sum(bfdr_matrix .< 0.05, dims=2)) ./ n_settings,
+        frac_BFDR_lt_0_01 = vec(sum(bfdr_matrix .< 0.01, dims=2)) ./ n_settings
     )
+
+    # Threshold crossing detection: does this protein cross the boundary across settings?
+    threshold_crossing_0_95 = [
+        any(posterior_matrix[i, :] .>= 0.95) && any(posterior_matrix[i, :] .< 0.95)
+        for i in 1:size(posterior_matrix, 1)
+    ]
+    threshold_crossing_0_5 = [
+        any(posterior_matrix[i, :] .>= 0.5) && any(posterior_matrix[i, :] .< 0.5)
+        for i in 1:size(posterior_matrix, 1)
+    ]
+
+    stability.threshold_crossing_0_95 = threshold_crossing_0_95
+    stability.threshold_crossing_0_5 = threshold_crossing_0_5
 
     return stability
 end
@@ -336,8 +619,6 @@ function generate_sensitivity_report(
     sr::SensitivityResult;
     filename::String = "sensitivity_report.md",
     title::String = "Prior Sensitivity Analysis Report",
-    tornado_file::String = "",
-    heatmap_file::String = "",
     rankcorr_file::String = ""
 )
     n_proteins = length(sr.protein_names)
@@ -394,13 +675,6 @@ function generate_sensitivity_report(
     println(io, "| Always below P < 0.5 | $n_always_below_05 ($(round(100*n_always_below_05/n_proteins, digits=1))%) |")
     println(io)
 
-    # Embed tornado plot
-    if !isempty(tornado_file) && isfile(tornado_file)
-        rel = _relative_plot_path(filename, tornado_file)
-        println(io, "![$title - Tornado Plot]($rel)")
-        println(io)
-    end
-
     # Classification stability
     println(io, "## Classification Stability")
     println(io)
@@ -410,8 +684,8 @@ function generate_sensitivity_report(
         (:frac_P_gt_0_5, "P > 0.5"),
         (:frac_P_gt_0_8, "P > 0.8"),
         (:frac_P_gt_0_95, "P > 0.95"),
-        (:frac_q_lt_0_05, "q < 0.05"),
-        (:frac_q_lt_0_01, "q < 0.01")
+        (:frac_BFDR_lt_0_05, "BFDR < 0.05"),
+        (:frac_BFDR_lt_0_01, "BFDR < 0.01")
     ]
         vals = sr.classification_stability[!, col]
         stable = sum(vals .== 1.0)
@@ -432,13 +706,6 @@ function generate_sensitivity_report(
         println(io, "| $(row.Protein) | $(round(row.baseline_posterior, digits=4)) | $(round(row.mean_posterior, digits=4)) | $(round(row.std_posterior, digits=4)) | $(round(row.min_posterior, digits=4)) | $(round(row.max_posterior, digits=4)) | $(round(row.range, digits=4)) |")
     end
     println(io)
-
-    # Embed heatmap
-    if !isempty(heatmap_file) && isfile(heatmap_file)
-        rel = _relative_plot_path(filename, heatmap_file)
-        println(io, "![$title - Posterior Heatmap]($rel)")
-        println(io)
-    end
 
     # Most robust high-confidence proteins
     high_conf = filter(r -> r.baseline_posterior > 0.8, sr.summary)
@@ -507,7 +774,7 @@ function generate_sensitivity_report(
 
     # Write to file
     open(filename, "w") do f
-        write(f, content)
+        Base.write(f, content)
     end
 
     return (filename, content)

@@ -2,6 +2,27 @@
 # Plots for posterior predictive checks, residuals, and calibration
 
 """
+    compute_em_responsibilities(p_data, joint_H0, joint_H1, π0, π1) -> Vector{Float64}
+
+Recompute per-protein EM responsibilities (H1 weights) from stored model parameters.
+Returns w_i = P(H1 | x_i) for each protein, i.e. the posterior probability of belonging
+to the H1 component given the fitted mixture model.
+"""
+function compute_em_responsibilities(p_data, joint_H0::SklarDist, joint_H1::SklarDist,
+                                     π0::Float64, π1::Float64)
+    p_mat = hcat(p_data.enrichment, p_data.correlation, p_data.detection)'
+    lo, hi = -300.0, 300.0
+    f0 = _safe_logpdf_vec(joint_H0, p_mat, lo, hi)
+    f1 = _safe_logpdf_vec(joint_H1, p_mat, lo, hi)
+    log_π0 = log(max(π0, 1e-300))
+    log_π1 = log(max(π1, 1e-300))
+    log_denom = logsumexp.(log_π0 .+ f0, log_π1 .+ f1)
+    log_w = (log_π1 .+ f1) .- log_denom
+    w = exp.(clamp.(log_w, -20.0, 0.0))
+    return clamp.(w, 0.0, 1.0)
+end
+
+"""
     ppc_density_plot(ppc::ProteinPPC; file="")
 
 Overlay observed data density with simulated posterior predictive densities.
@@ -270,57 +291,6 @@ function calibration_plot(cal::CalibrationResult; file::String = "")
 end
 
 """
-    calibration_comparison_plot(dr::DiagnosticsResult; file="")
-
-Overlay calibration curves from all available proxies (strict, relaxed, enrichment-only)
-on a single plot for direct comparison.
-
-# Keywords
-- `file::String`: If non-empty, save plot to this path
-"""
-function calibration_comparison_plot(dr; file::String = "")
-    plt = StatsPlots.plot(
-        xlims = (0, 1),
-        ylims = (0, 1),
-        xlabel = "Predicted Probability",
-        ylabel = "Observed Rate",
-        title = "Calibration Comparison",
-        aspect_ratio = :equal,
-        legend = :topleft
-    )
-
-    # Diagonal reference (perfect calibration)
-    StatsPlots.plot!(plt, [0, 1], [0, 1],
-        color=:gray, linewidth=1, linestyle=:dash, label="Perfect calibration")
-
-    # Plot each proxy
-    proxies = [
-        ("Strict 3/3", dr.calibration, :steelblue, :circle),
-        ("Relaxed 2/3", dr.calibration_relaxed, :orange, :diamond),
-        ("Enrichment", dr.calibration_enrichment_only, :green, :utriangle)
-    ]
-
-    for (label, cal, color, shape) in proxies
-        isnothing(cal) && continue
-        mask = cal.bin_counts .> 0
-        pred = cal.predicted_rate[mask]
-        obs = cal.observed_rate[mask]
-
-        if !isempty(pred)
-            ece_str = string(round(cal.ece, digits=3))
-            StatsPlots.scatter!(plt, pred, obs,
-                markersize=4, color=color, markershape=shape,
-                label="$label (ECE=$ece_str)")
-            StatsPlots.plot!(plt, pred, obs,
-                color=color, linewidth=1.5, alpha=0.7, label=nothing)
-        end
-    end
-
-    !isempty(file) && StatsPlots.savefig(plt, file)
-    return plt
-end
-
-"""
     pit_histogram_plot(pit_values::Vector{Float64}; n_bins=10, file="")
 
 Histogram of PIT (Probability Integral Transform) values with Uniform(0,1) reference line.
@@ -455,6 +425,204 @@ function bb_ppc_summary_plot(bb_ppcs::Vector{BetaBernoulliPPC}; n_top::Int = 20,
         color=:red, markersize=5, label="Observed", markershape=:diamond)
     StatsPlots.scatter!(plt, sim_medians, y,
         color=:steelblue, markersize=4, label="Simulated (median)")
+
+    !isempty(file) && StatsPlots.savefig(plt, file)
+    return plt
+end
+
+"""
+    bma_weights_plot(bma_result::BMAResult; file="")
+
+Two-panel diagnostic for BMA model averaging.
+Left: Bar chart of LOO stacking weights (2 models: 3c-EM and Copula).
+Right: Scatter of log10(copula BF) vs log10(3c-EM BF) with disagreement coloring.
+
+# Keywords
+- `file::String`: If non-empty, save plot to this path
+"""
+function bma_weights_plot(bma_result::BMAResult; file::String = "")
+    plt = StatsPlots.plot(layout = (1, 2), size = (1100, 500),
+        bottom_margin = 8 * StatsPlots.Plots.mm,
+        top_margin = 5 * StatsPlots.Plots.mm)
+
+    # Left panel: Stacking weight bar chart (always 2 models now)
+    model_names = ["3c-EM", "Copula"]
+    w = [bma_result.em_weight, bma_result.copula_weight]
+    bar_colors = [:orange, :steelblue]
+
+    StatsPlots.bar!(plt, model_names, w,
+        color = bar_colors, alpha = 0.8,
+        ylabel = "Stacking Weight", title = "Model Weights (LOO Stacking)",
+        label = nothing, ylims = (0, 1.15),
+        xrotation = 0,
+        subplot = 1)
+    for (i, wt) in enumerate(w)
+        y_pos = max(wt / 2, 0.08)
+        StatsPlots.annotate!(plt,
+            [(i, y_pos, StatsPlots.Plots.text(
+                "w=$(round(wt, digits=3))",
+                9, :center, :center))],
+            subplot = 1)
+    end
+
+    # Right panel: copula BF vs 3c-EM BF scatter with disagreement coloring
+    log10_cop = log10.(max.(bma_result.copula_result.bf, 1e-300))
+    log10_em = log10.(max.(bma_result.em3c_result.bf, 1e-300))
+
+    n = length(log10_cop)
+    colors = [bma_result.model_disagreement[i] ? :red : :gray60 for i in 1:n]
+
+    StatsPlots.scatter!(plt, log10_cop, log10_em,
+        color = colors, markersize = 2, alpha = 0.4,
+        xlabel = "log10(BF) Copula", ylabel = "log10(BF) 3c-EM",
+        title = "Model Agreement",
+        label = nothing, legend = :bottomright,
+        subplot = 2)
+
+    bf_range = [min(minimum(log10_cop), minimum(log10_em)),
+                max(maximum(log10_cop), maximum(log10_em))]
+    StatsPlots.plot!(plt, bf_range, bf_range,
+        color = :red, linewidth = 1.5, linestyle = :dash,
+        label = "y = x", subplot = 2)
+
+    r = cor(log10_cop, log10_em)
+    n_disagree = count(bma_result.model_disagreement)
+    x_ann = bf_range[2] - 0.05 * (bf_range[2] - bf_range[1])
+    y_ann = bf_range[1] + 0.15 * (bf_range[2] - bf_range[1])
+    StatsPlots.annotate!(plt,
+        [(x_ann, y_ann,
+          StatsPlots.Plots.text("r = $(round(r, digits=3))\ndisagree = $n_disagree / $n",
+            9, :right, :bottom))],
+        subplot = 2)
+
+    !isempty(file) && StatsPlots.savefig(plt, file)
+    return plt
+end
+
+
+# ============================================================================ #
+# 3-Component Diagnostic Visualizations
+# ============================================================================ #
+
+"""
+    component_assignment_plot(bf::BayesFactorTriplet, lc_result::LatentClassResult; file="")
+
+Scatter plot of proteins in 2D log-BF space (enrichment vs correlation), colored by
+dominant component assignment (H0=blue, Agnostic=gray, H1=red).
+Marker alpha proportional to max responsibility, size scaled by log detection BF.
+"""
+function component_assignment_plot(bf::BayesFactorTriplet, lc_result::LatentClassResult;
+                                    file::String = "")
+    if lc_result.responsibilities === nothing
+        plt = StatsPlots.plot(title="No responsibilities available for component assignment")
+        !isempty(file) && StatsPlots.savefig(plt, file)
+        return plt
+    end
+
+    log_e = log.(max.(bf.enrichment, 1e-300))
+    log_c = log.(max.(bf.correlation, 1e-300))
+    log_d = log.(max.(bf.detection, 1e-300))
+
+    n = length(log_e)
+    resp = lc_result.responsibilities
+
+    # Determine dominant component and max responsibility for each protein
+    assignments = [argmax(resp[i, :]) for i in 1:n]
+    max_resp = [maximum(resp[i, :]) for i in 1:n]
+
+    # Marker size scaled by log detection BF (clamped for visibility)
+    log_d_clamped = clamp.(log_d, -5.0, 5.0)
+    ms_range = log_d_clamped .- minimum(log_d_clamped)
+    ms_scaled = 2.0 .+ 6.0 .* ms_range ./ max(maximum(ms_range), 1e-10)
+
+    h0_idx = findall(assignments .== 1)
+    ag_idx = findall(assignments .== 2)
+    h1_idx = findall(assignments .== 3)
+
+    plt = StatsPlots.plot(
+        title="3-Component Assignment (n_H0=$(length(h0_idx)), n_ag=$(length(ag_idx)), n_H1=$(length(h1_idx)))",
+        xlabel="log(BF enrichment)", ylabel="log(BF correlation)",
+        size=(800, 600), legend=:topright
+    )
+
+    # Plot each component separately for legend
+    if !isempty(h0_idx)
+        StatsPlots.scatter!(plt, log_e[h0_idx], log_c[h0_idx],
+            color=:steelblue, alpha=max_resp[h0_idx] .* 0.8,
+            ms=ms_scaled[h0_idx], label="H0 (n=$(length(h0_idx)))",
+            markerstrokewidth=0)
+    end
+    if !isempty(ag_idx)
+        StatsPlots.scatter!(plt, log_e[ag_idx], log_c[ag_idx],
+            color=:gray50, alpha=max_resp[ag_idx] .* 0.8,
+            ms=ms_scaled[ag_idx], label="Agnostic (n=$(length(ag_idx)))",
+            markerstrokewidth=0)
+    end
+    if !isempty(h1_idx)
+        StatsPlots.scatter!(plt, log_e[h1_idx], log_c[h1_idx],
+            color=:red, alpha=max_resp[h1_idx] .* 0.8,
+            ms=ms_scaled[h1_idx], label="H1 (n=$(length(h1_idx)))",
+            markerstrokewidth=0)
+    end
+
+    !isempty(file) && StatsPlots.savefig(plt, file)
+    return plt
+end
+
+"""
+    em_convergence_plot(lc_result::LatentClassResult; file="")
+
+Two-panel layout:
+Left: Log-likelihood trace from EM iterations.
+Right: Final mixing weights bar chart [pi_H0, pi_ag, pi_H1].
+"""
+function em_convergence_plot(lc_result::LatentClassResult; file::String = "")
+    plt = StatsPlots.plot(layout=(1, 2), size=(1000, 400),
+        bottom_margin=8 * StatsPlots.Plots.mm,
+        top_margin=5 * StatsPlots.Plots.mm)
+
+    # Left panel: log-likelihood trace
+    fe = lc_result.free_energy
+    if isempty(fe)
+        StatsPlots.annotate!(plt,
+            [(0.5, 0.5, StatsPlots.Plots.text("No convergence data", 12, :center))],
+            subplot=1)
+        StatsPlots.plot!(plt, title="EM Convergence", subplot=1)
+    else
+        iters = 1:length(fe)
+        StatsPlots.plot!(plt, collect(iters), fe,
+            color=:steelblue, linewidth=2, label="Log-likelihood",
+            xlabel="Iteration", ylabel="Log-Likelihood",
+            title="EM Convergence (converged=$(lc_result.converged), n_iter=$(lc_result.n_iterations))",
+            subplot=1)
+        if lc_result.converged
+            StatsPlots.vline!(plt, [lc_result.n_iterations],
+                color=:red, linestyle=:dash, linewidth=1.5,
+                label="Converged", subplot=1)
+        end
+    end
+
+    # Right panel: final mixing weights
+    w = lc_result.mixing_weights
+    if length(w) >= 3
+        labels = ["H0", "Agnostic", "H1"]
+        colors = [:steelblue, :gray50, :red]
+        StatsPlots.bar!(plt, labels, w[1:3],
+            color=colors, alpha=0.8, label=nothing,
+            ylabel="Weight", title="Final Mixing Weights",
+            ylims=(0, 1.15), subplot=2)
+        for (i, wt) in enumerate(w[1:3])
+            y_pos = max(wt / 2, 0.05)
+            StatsPlots.annotate!(plt,
+                [(i, y_pos, StatsPlots.Plots.text(
+                    "$(round(wt, digits=3))", 9, :center, :center))],
+                subplot=2)
+        end
+    else
+        StatsPlots.annotate!(plt,
+            [(0.5, 0.5, StatsPlots.Plots.text("Weights unavailable", 12, :center))],
+            subplot=2)
+    end
 
     !isempty(file) && StatsPlots.savefig(plt, file)
     return plt

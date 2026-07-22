@@ -57,8 +57,9 @@ function _make_mock_result(;
 
     return AnalysisResult(
         copula_results, df_hierarchical, em, joint, joint,
-        nothing, :copula_em, nothing, nothing,
+        nothing, nothing, :copula_em, nothing, nothing,
         UInt64(0), UInt64(0), now(), "0.1.0", nothing, nothing,
-        nothing, nothing
+        nothing, nothing, nothing,
+        :extension_not_loaded  # metalearner_status
     )
 end

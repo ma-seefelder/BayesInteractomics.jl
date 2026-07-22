@@ -1,0 +1,3 @@
+#string_protein_id	alias	source
+9606.ENSP00000A1	P11111	Ensembl_UniProt
+9606.ENSP00000A2	P22222	Ensembl_UniProt

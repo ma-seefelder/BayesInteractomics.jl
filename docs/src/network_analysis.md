@@ -40,7 +40,7 @@ ar = AnalysisResult(results, bait_protein="MYC", bait_index=1)
 # Build high-confidence network
 net = build_network(ar,
     posterior_threshold = 0.8,
-    q_threshold = 0.01
+    bfdr_threshold = 0.01
 )
 
 # Analyze network properties
@@ -92,7 +92,7 @@ df = DataFrame(
     Protein = ["A", "B", "C"],
     PosteriorProbability = [0.95, 0.85, 0.75],
     BayesFactor = [100.0, 50.0, 20.0],
-    q_value = [0.001, 0.01, 0.02],
+    BFDR = [0.001, 0.01, 0.02],
     mean_log2FC = [3.2, 2.8, 2.1]
 )
 
@@ -104,7 +104,7 @@ net = build_network(ar, posterior_threshold=0.8)
 - Protein names: `Protein` or `protein`
 - Posterior probability: `PosteriorProbability`, `posterior_probability`, or `posterior_prob`
 - Bayes factor: `BayesFactor`, `bayes_factor`, or `BF`
-- Q-value (FDR): `q_value`, `QValue`, or `q`
+- BFDR (Bayesian FDR): `BFDR`
 - Log2 fold change (optional): `mean_log2FC` or `log2FC`
 
 ### InteractionNetwork
@@ -196,7 +196,7 @@ Build interaction network from analysis results with statistical filtering:
 net = build_network(ar::AbstractAnalysisResult;
     posterior_threshold = 0.5,
     bf_threshold = nothing,
-    q_threshold = 0.05,
+    bfdr_threshold = 0.05,
     log2fc_threshold = nothing,
     include_bait = true,
     weight_by = :posterior_prob
@@ -206,7 +206,7 @@ net = build_network(ar::AbstractAnalysisResult;
 **Arguments:**
 - `posterior_threshold`: Minimum posterior probability (default: 0.5)
 - `bf_threshold`: Minimum Bayes factor (optional)
-- `q_threshold`: Maximum FDR q-value (default: 0.05)
+- `bfdr_threshold`: Maximum Bayesian FDR (default: 0.05)
 - `log2fc_threshold`: Minimum absolute log2 fold change (optional)
 - `include_bait`: Include bait protein as network node (default: true)
 - `weight_by`: Edge weight source (`:posterior_prob`, `:bayes_factor`, or `:log2fc`)
@@ -216,20 +216,20 @@ net = build_network(ar::AbstractAnalysisResult;
 # High-confidence network (stringent)
 net_high = build_network(ar,
     posterior_threshold = 0.9,
-    q_threshold = 0.01,
+    bfdr_threshold = 0.01,
     bf_threshold = 10.0
 )
 
 # Medium-confidence network (balanced)
 net_medium = build_network(ar,
     posterior_threshold = 0.8,
-    q_threshold = 0.05
+    bfdr_threshold = 0.05
 )
 
 # Exploratory network (permissive)
 net_explore = build_network(ar,
     posterior_threshold = 0.5,
-    q_threshold = 0.1
+    bfdr_threshold = 0.1
 )
 
 # Focus on strong enrichment
@@ -512,7 +512,7 @@ export_graphml(net, "network.graphml")
 ```
 
 GraphML preserves all node and edge attributes:
-- Node attributes: protein name, posterior probability, Bayes factor, q-value, log2FC, bait status
+- Node attributes: protein name, posterior probability, Bayes factor, BFDR, log2FC, bait status
 - Edge attributes: interaction weight
 
 **Using in Cytoscape:**
@@ -563,7 +563,7 @@ Creates CSV with columns:
 - `node_id`: Node index
 - `posterior_prob`: Posterior probability
 - `bayes_factor`: Bayes factor
-- `q_value`: FDR q-value
+- `BFDR`: Bayesian FDR (per-protein significance metric)
 - `mean_log2fc`: Mean log2 fold change (if available)
 - `is_bait`: Boolean indicating bait protein
 
@@ -615,7 +615,7 @@ ar = AnalysisResult(results, bait_protein="MYC", bait_index=1)
 println("Building network...")
 net = build_network(ar,
     posterior_threshold = 0.8,
-    q_threshold = 0.01,
+    bfdr_threshold = 0.01,
     weight_by = :posterior_prob
 )
 
@@ -696,7 +696,7 @@ df = CSV.read("my_interactions.csv", DataFrame)
 # - Protein (or protein)
 # - PosteriorProbability (or posterior_probability, posterior_prob)
 # - BayesFactor (or bayes_factor, BF)
-# - q_value (or QValue, q)
+# - BFDR
 
 # Create analysis result wrapper
 ar = NetworkAnalysisResult(df, bait_protein="MYC")
@@ -784,7 +784,7 @@ end
 ```julia
 net = build_network(ar,
     posterior_threshold = 0.9,
-    q_threshold = 0.01,
+    bfdr_threshold = 0.01,
     bf_threshold = 10.0
 )
 ```
@@ -794,7 +794,7 @@ Use for: Core interactome, publication figures, high-confidence candidates
 ```julia
 net = build_network(ar,
     posterior_threshold = 0.8,
-    q_threshold = 0.05
+    bfdr_threshold = 0.05
 )
 ```
 Use for: General analysis, community detection, hub identification
@@ -803,7 +803,7 @@ Use for: General analysis, community detection, hub identification
 ```julia
 net = build_network(ar,
     posterior_threshold = 0.5,
-    q_threshold = 0.1
+    bfdr_threshold = 0.1
 )
 ```
 Use for: Discovery, pathway analysis, network topology studies
@@ -852,7 +852,7 @@ using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
 
 **Solution:** Relax thresholds
 ```julia
-net = build_network(ar, posterior_threshold=0.5, q_threshold=0.1)
+net = build_network(ar, posterior_threshold=0.5, bfdr_threshold=0.1)
 ```
 
 ### Disconnected network (diameter = nothing)
@@ -881,6 +881,34 @@ println("Largest component: $(stats.largest_component_size)")
 - Try different algorithm
 - Relax filtering thresholds to include more edges
 - Consider hierarchical clustering for star networks
+
+## API Reference
+
+```@docs
+build_network
+network_statistics
+centrality_measures
+detect_communities
+plot_network
+save_network_plot
+export_graphml
+export_edgelist
+export_node_attributes
+centrality_dataframe
+community_dataframe
+get_top_hubs
+edge_source_summary
+NetworkConfig
+NetworkPipelineResult
+AbstractNetworkResult
+run_network_analysis
+generate_network_report
+PPIEnrichmentConfig
+enrich_network
+query_string_ppi
+clear_ppi_cache
+ppi_cache_info
+```
 
 ## References
 

@@ -1,4 +1,4 @@
-# Data Curation and Quality Control
+# Data Curation
 
 ## Overview
 
@@ -9,6 +9,8 @@ Before running the Bayesian analysis, input data often requires curation to ensu
 - **Synonym resolution**: Query the STRING database to map protein names to canonical identifiers
 - **Duplicate merging**: Merge rows that map to the same canonical protein
 - **Bait tracking**: Track the bait protein index through all curation steps
+
+The curation API lives in the `BayesInteractomics.Curation` organisational submodule; its public symbols (`curate_proteins`, `CurationReport`, and the splitting/merging API) are re-exported at the top-level `BayesInteractomics` namespace, so they are available unqualified after `using BayesInteractomics`.
 
 ## Quick Start
 

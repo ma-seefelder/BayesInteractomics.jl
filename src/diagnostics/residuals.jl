@@ -446,13 +446,27 @@ function _compute_protein_flags(
 
         is_low = n_obs < 4
 
-        # Residual-based metrics: only available for PPC subset
+        # Residual-based metrics: prefer PPC residuals, fall back to raw z-scores
         if haskey(ppc_lookup, pname)
             resids = ppc_lookup[pname]
             n_resid = length(resids)
             mean_r = n_resid > 0 ? mean(resids) : NaN
             max_abs_r = n_resid > 0 ? maximum(abs.(resids)) : NaN
             is_outlier = !isnan(mean_r) && abs(mean_r) > 2.0
+        elseif !isnothing(data_idx) && n_obs >= 2
+            # Fallback: simple z-score residuals from raw sample data
+            observed = Float64[v for v in sample_mat if !ismissing(v)]
+            μ_obs = mean(observed)
+            σ_obs = std(observed)
+            if σ_obs > 0
+                resids = (observed .- μ_obs) ./ σ_obs
+                mean_r = mean(resids)
+                max_abs_r = maximum(abs.(resids))
+            else
+                mean_r = 0.0
+                max_abs_r = 0.0
+            end
+            is_outlier = abs(mean_r) > 2.0
         else
             mean_r = NaN
             max_abs_r = NaN

@@ -1,199 +1,120 @@
 # BayesInteractomics.jl
 
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://ma-seefelder.github.io/BayesInteractomics.jl)
-[![Build Status](https://github.com/ma-seefelder/BayesInteractomics.jl/workflows/CI/badge.svg)](https://github.com/ma-seefelder/BayesInteractomics.jl/actions)
+[![CI](https://github.com/ma-seefelder/BayesInteractomics.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/ma-seefelder/BayesInteractomics.jl/actions/workflows/CI.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**BayesInteractomics.jl** is a Julia package for rigorous Bayesian analysis of protein-protein interactions from Affinity-Purification Mass Spectrometry (AP-MS) and proximity labeling experiments. The package implements a comprehensive statistical framework that combines evidence from multiple sources to identify genuine interacting partners with quantified uncertainty.
+**BayesInteractomics.jl** is a Julia package for rigorous Bayesian analysis of protein–protein interactions from Affinity-Purification Mass Spectrometry (AP-MS) and proximity-labeling experiments. It couples a **deep-learning structural-interaction prior** with a **multi-evidence Bayesian evidence engine**, calibrates the resulting posterior probabilities against simulation ground truth, and ships an interactive single-file HTML report.
 
 ## Overview
 
-Identifying true protein-protein interactions from mass spectrometry data is challenging due to:
-- Non-specific binding and contaminants
-- Missing data across replicates and experiments
-- Heterogeneity across experimental protocols
-- Complex dose-response relationships
+Identifying genuine protein–protein interactions from mass-spectrometry data is challenging because of non-specific binding and contaminants, missing data across replicates and protocols, heterogeneity between experimental methods, and complex dose–response relationships. Traditional single-statistic filters (a t-test on fold changes, or one scoring scheme) discard most of the multi-dimensional structure of the data and leave prior biological knowledge unused.
 
-BayesInteractomics addresses these challenges through a **three-model Bayesian framework** that evaluates:
+BayesInteractomics answers this with **two engines that meet at a posterior**:
 
-1. **Detection Probability** (Beta-Bernoulli model): Is the protein consistently detected in samples vs. controls?
-2. **Enrichment** (Hierarchical Bayesian Model): Is the protein quantitatively enriched in samples?
-3. **Dose-Response Correlation** (Bayesian Regression): Does abundance correlate with bait protein levels?
+1. **Prior engine.** A deep neural network (DNN) predicts the probability that two proteins are direct interactors from sequence and network features. That DNN score becomes one of the inputs to a **metalearner** — a self-contained `MLJ.Stack` over a 14-feature schema (`:tr_ddi`) with a bundled isotonic calibrator — which turns orthogonal structural and database evidence into a calibrated **prior** for each candidate.
+2. **Evidence engine.** For every candidate the package computes three log-Bayes factors — detection (Beta-Bernoulli), enrichment (Hierarchical Bayesian Model), and dose-response correlation (Bayesian regression) — and combines them with **Bayesian Model Averaging (BMA)** over a **Copula** mixture and a **3-component latent class model (3c-EM)**, yielding a combined Bayes factor `BF_BMA`.
 
-These individual lines of evidence are combined using **copula-based mixture models** to produce joint Bayes factors and posterior probabilities for each candidate interaction. The hierarchical approach naturally handles multiple protocols, missing data, and protocol-level variability.
+The two engines meet as **posterior odds = prior odds × BF_BMA**, giving a calibrated `posterior_prob` per protein, controlled globally at a Bayesian false discovery rate (**BFDR**) with per-protein Posterior Error Probability (**PEP**) and `local_fdr`.
 
 ## Key Features
 
-- **Rigorous Bayesian inference** using RxInfer.jl for principled uncertainty quantification
-- **Multiple protocol integration** through hierarchical modeling
-- **Copula-based evidence combination** for flexible dependency modeling
-- **Multiple imputation support** for handling missing data
-- **Parallel computation** for analyzing thousands of proteins efficiently
-- **Comprehensive visualization** including volcano plots, evidence distributions, and convergence diagnostics
-- **Meta-learning capabilities** for transferring knowledge across experiments
+- **Deep-learning prior via the metalearner.** A DNN structural-contact predictor feeds a self-contained `MLJ.Stack` metalearner over the 14-feature `:tr_ddi` schema (STRING channels + the `DNN` score + Pfam domain–domain interaction counts) with a post-hoc isotonic calibrator. The 14-feature schema is the production default; a 15-feature MC-Dropout variant (`:tr_ddi_mc`) is available as an opt-in via `metalearner_use_mc_dropout = true`. When the metalearner extension is not loaded, `posterior_prob` falls back to the evidence-engine Bayes factor.
+- **Bayesian Model Averaging (BMA)** over the **Copula** and **3c-EM** models with LOO stacking weights and a 5% weight floor — robust posteriors even when a single model is misspecified. Sub-model `bf_em` and `bf_copula` columns are exposed for transparency.
+- **MNAR dropout-aware imputation.** A per-column logistic dropout curve drives a tilted-Gaussian missing-not-at-random sampler (`imputation_method = :mnar`), with an optional multi-imputation Rubin's-rules pooling path.
+- **Differential interactome analysis** (`differential_analysis`): 2-group differential Bayes factor (dBF), k-group all-pairs / one-vs-reference contrasts with a closed-form Gaussian omnibus test, and **Bayesian decision risk** (`optimal_call` + `decision_risk` under a user-overrideable loss matrix) for ranking validation candidates.
+- **Multi-protocol normalisation** (`normalisation_method`: `:none` / `:row_center` / `:median_of_ratios` / `:both` / `:auto`) with automatic scale-mismatch detection and normalise-before-impute ordering.
+- **Protein and sample embeddings** (`EmbeddingsConfig`): DNN-derived per-protein UMAP/t-SNE coordinates, sample-level embeddings, and pairwise condition similarity feeding the multi-condition report tab.
+- **Input data quality control**: five automated checks — scale detection, replicate correlation, missingness asymmetry, intensity-distribution shape, PCA separation — surfaced as `:ok` / `:warning` / `:fail` flags before the full analysis.
+- **Parametric simulation engine + Platt calibration**: a 5×5 grid (interaction prevalence × effect scale) × replicates synthesises ground truth; Platt logistic recalibrates predicted posteriors with an Expected Calibration Error (ECE) safety guard.
+- **AlphaFold-based structural docking validation**: three scoring tiers — ipTM step function, pDockQ logistic (Burke et al. 2023), and C2Qscore (preferred for AF3) — combined via a two-stage Bayesian update.
+- **Robust regression** with Student-t likelihood (configurable ν) and a JZS Cauchy slope prior (`jzs_r_scale = 0.354`, JASP convention).
+- **Network analysis** (extension): graph construction, centrality, community detection, Cytoscape/Gephi export.
+- **Interactive HTML report** with tabs for Results, Evidence, Calibration, Sensitivity, Mixture Model, Structural Evidence, Differential, Data Quality, and Methods — single-file output, no server.
+- **Parallel execution** across thousands of proteins; resumable JLD2 caches for H0, Beta-Bernoulli, HBM/regression, simulation, and calibration.
 
 ## Installation
 
-BayesInteractomics requires Julia 1.9 or later. Install from the Julia REPL:
-
-```julia
-using Pkg
-Pkg.add("BayesInteractomics")
-```
-
-Or install the development version from GitHub:
+BayesInteractomics requires Julia 1.9 or later:
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/ma-seefelder/BayesInteractomics.jl")
 ```
 
-## Quick Start
+## Quickstart
 
-### Basic Analysis Workflow
+A complete v1.2.1 analysis fits in a dozen lines. Replace the file path and column dictionaries with your own data — see the [Tutorial](docs/src/tutorial.md) for column-mapping details.
 
 ```julia
 using BayesInteractomics
 
-# Define experimental configuration
 config = CONFIG(
-    # Input data files
-    datafile = ["data/protocol1.xlsx", "data/protocol2.xlsx"],
-
-    # Column mappings for each protocol
-    # Format: Dict(experiment_id => column_indices)
-    control_cols = [
-        Dict(1 => [2,3,4], 2 => [5,6,7]),    # Protocol 1
-        Dict(1 => [2,3,4], 2 => [5,6])        # Protocol 2
-    ],
-    sample_cols = [
-        Dict(1 => [8,9,10], 2 => [11,12,13]), # Protocol 1
-        Dict(1 => [8,9,10], 2 => [11,12])     # Protocol 2
-    ],
-
-    # Analysis parameters
-    poi = "UNIPROT_ID_OF_BAIT",  # Protein of interest
-    refID = 1,                    # Index of reference protein (bait)
-    n_controls = 10,              # Total control samples
-    n_samples = 12,               # Total bait samples
-    normalise_protocols = true,   # Normalize across protocols
-
-    # Output files
-    H0_file = "copula_H0.xlsx",          # Null hypothesis copula parameters
-    results_file = "final_results.xlsx",  # Main results table
-    volcano_file = "volcano_plot.svg",    # Volcano visualization
-    convergence_file = "convergence.svg"  # Convergence diagnostics
+    datafile     = ["data/my_apms_data.xlsx"],            # replace with your file
+    control_cols = [Dict(1 => [2,3,4], 2 => [5,6,7])],
+    sample_cols  = [Dict(1 => [8,9,10], 2 => [11,12,13])],
+    poi          = "BAIT_UNIPROT_ID",
+    n_controls   = 6,
+    n_samples    = 6,
+    refID        = 1,
+    output       = OutputFiles("results", image_ext=".svg"),
+    combination_method = :bma,           # BMA over Copula + 3c-EM (recommended)
+    run_input_qc       = true,           # five-check input QC
+    run_simulation     = true,           # parametric simulation + Platt calibration
+    run_validation     = true,           # automated quality gates
 )
-
-# Run complete analysis pipeline
-results = run_analysis(config)
+results, ar = run_analysis(config)
+run(`open $(config.output.report_file)`)  # open the interactive HTML report
 ```
 
-### Understanding the Output
-
-The `results` DataFrame contains:
-
-- **`Protein`**: Protein identifier
-- **`BF_enrichment`**, **`BF_correlation`**, **`BF_detection`**: Individual Bayes factors from each model (>1 supports interaction)
-- **`Combined_BF`**: Joint Bayes factor from copula combination
-- **`Posterior_Probability`**: Probability of genuine interaction (0-1)
-- **`log2FC_mean`**, **`log2FC_median`**: Estimated enrichment
-- **`pd`**: Probability of direction (directional evidence strength)
-- **`rope_percentage`**: Percentage in region of practical equivalence
-
-**Interpretation guideline**:
-- **Posterior Probability > 0.95**: Strong evidence for interaction
-- **Posterior Probability 0.75-0.95**: Moderate evidence
-- **Posterior Probability < 0.25**: Strong evidence against interaction
-
-### Loading Data
+To activate the deep-learning prior, load the metalearner extension trigger packages before `using BayesInteractomics` (see [Optional Features](docs/src/optional_features.md)):
 
 ```julia
+using Flux, MLJ, MLJScikitLearnInterface, HDF5    # metalearner (14-feat :tr_ddi prior)
+using GLM                                          # MNAR imputation
 using BayesInteractomics
-
-# Load data from multiple files with specified column mappings
-data = load_data(
-    ["experiment1.xlsx", "experiment2.csv"],
-    sample_cols = [
-        Dict(1 => [5,6,7], 2 => [8,9,10]),
-        Dict(1 => [5,6,7])
-    ],
-    control_cols = [
-        Dict(1 => [2,3,4]),
-        Dict(1 => [2,3,4])
-    ],
-    normalise_protocols = true
-)
-
-# The data structure is hierarchical:
-# InteractionData → Protocols → Experiments → Samples
 ```
 
-### Running Individual Models
-
-For more control, run individual components:
-
-```julia
-# Compute Bayes factors for a single protein
-protein_data = getProteinData(data, protein_index)
-
-# Beta-Bernoulli model (detection)
-bf_detection = betaBernoulli(protein_data, n_controls, n_samples)
-
-# Hierarchical Bayesian Model (enrichment)
-hbm_result = HierarchicalBayesianModel(protein_data, data)
-
-# Bayesian regression (correlation)
-reg_result = RegressionModel(protein_data, data, refID)
-
-# Access Bayes factors
-bf_enrichment = hbm_result.BF
-bf_correlation = reg_result.BF
-```
+The pipeline produces a results DataFrame (with `posterior_prob`, `PEP`, `BFDR`, `local_fdr`, `bf_em`, `bf_copula`, `Combined_BF`, `log2FC_mean`, `diagnostic_flag`, `classification_stability`, etc.) and a single-file HTML report at `results/interactive_report.html`.
 
 ## Documentation
 
-For comprehensive documentation, tutorials, and examples, visit:
-**[https://ma-seefelder.github.io/BayesInteractomics.jl](https://ma-seefelder.github.io/BayesInteractomics.jl)**
+The full documentation lives at **[https://ma-seefelder.github.io/BayesInteractomics.jl](https://ma-seefelder.github.io/BayesInteractomics.jl)**.
 
-Documentation sections:
-- **Tutorial**: Step-by-step guide for beginners
-- **Mathematical Background**: Detailed explanation of statistical models
-- **User Guide**: In-depth coverage of all features
-- **Examples**: Real-world analysis workflows
-- **API Reference**: Complete function documentation
+A good place to start is the use-case-branched **[Tutorial](docs/src/tutorial.md)**, which walks through:
+
+- Single dataset (one protocol),
+- Multiple protocols / meta-analysis,
+- Differential interactome (two or more conditions),
+- AlphaFold docking validation.
+
+Other dedicated pages: [Optional Features](docs/src/optional_features.md) (metalearner prior), [Imputation](docs/src/imputation.md), [Differential Analysis](docs/src/differential_analysis.md), [Decision Risk](docs/src/decision_risk.md), [Data Quality Control](docs/src/data_quality_control.md), [Simulation & Calibration](docs/src/simulation_calibration.md), [Prior Sensitivity](docs/src/prior_sensitivity.md), [Model Evaluation](docs/src/model_evaluation.md) (BMA section), [Diagnostics](docs/src/diagnostics.md), [Docking Integration](docs/src/docking.md), [Reports](docs/src/reports.md).
 
 ## Examples
 
-The `examples/` directory contains complete analysis workflows:
+The `examples/` directory contains runnable scripts:
 
-- **`hap40_interactome.jl`**: HAP40 protein interactome analysis with multiple protocols
-- **`meta_analysis_workflow.jl`**: Meta-analysis combining evidence across experiments
+- **`hap40_interactome.jl`** — single-dataset analysis + structural docking on the HAP40 bait.
+- **`hap40_differential_interactome.jl`** — wild-type vs. mutant differential interactome.
+- **`meta_analysis_workflow.jl`** — multi-protocol meta-analysis combining AP-MS datasets across labs and conditions.
 
 ## Scientific Background
 
-BayesInteractomics implements the statistical framework described in:
+BayesInteractomics implements a hybrid framework combining a deep-learning–informed prior with a multi-evidence Bayesian mixture model, described in an accompanying manuscript (**in preparation** — see [`CITATION.cff`](CITATION.cff)).
 
-> Seefelder et al. (2025). "Bayesian Integration of Multiple Evidence Sources for Protein Interactome Analysis." *(In preparation)*
-
-The three-model approach provides:
-- **Complementary evidence**: Different models capture different aspects of interaction
-- **Quantified uncertainty**: Full posterior distributions rather than point estimates
-- **Flexible integration**: Copulas model complex dependencies between evidence types
-- **Robustness**: Hierarchical structure shares information across protocols while accounting for heterogeneity
+Key statistical references underpinning the components: Yao et al. 2018 (BMA stacking), Storey 2002 (FDR), Burke et al. 2023 (pDockQ), Minka 2000 (Empirical Bayes Dirichlet fixed-point), Rouder et al. 2009 (JZS prior, JASP r=0.354), Platt 1999 (sigmoid calibration), Geweke 1993 (Student-t likelihood). Full citations in [Mathematical Background](docs/src/mathematical_background.md).
 
 ## Performance
 
-BayesInteractomics is optimized for throughput:
-- **Parallel processing**: Automatic multi-threading across proteins
-- **Efficient inference**: Variational Bayes via RxInfer.jl for fast convergence
-- **Caching**: Intermediate results cached to enable resumption
+- **Parallel processing**: automatic multi-threading across proteins via `Threads.@threads`.
+- **Variational inference** via RxInfer.jl for fast convergence (no MCMC chain mixing concerns).
+- **Resumable caches**: JLD2 caches for H0, Beta-Bernoulli, HBM/regression, simulation, calibration — independently invalidated on parameter change.
 
-Typical performance: ~1000 proteins analyzed in 5-15 minutes on an 8-core machine.
+Typical performance: ~1000 proteins in 5–15 minutes on an 8-core laptop with `combination_method = :bma`, `run_simulation = true`, `run_validation = true`.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests on [GitHub](https://github.com/ma-seefelder/BayesInteractomics.jl).
+Contributions are welcome — please submit issues, feature requests, or PRs on [GitHub](https://github.com/ma-seefelder/BayesInteractomics.jl).
 
 For development:
 
@@ -206,32 +127,28 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 ## Citation
 
-If you use BayesInteractomics in your research, please cite:
+A peer-reviewed publication describing BayesInteractomics is **in preparation**. Until it is posted, please cite the software using the metadata in [`CITATION.cff`](CITATION.cff) at the repository root (a DOI will be added once the preprint is available):
 
-```bibtex
-@software{bayesinteractomics2025,
-  author = {Seefelder, Manuel},
-  title = {BayesInteractomics.jl: Bayesian Analysis of Protein Interactome Data},
-  year = {2025},
-  url = {https://github.com/ma-seefelder/BayesInteractomics.jl}
-}
-```
+> Seefelder, M. *BayesInteractomics: a Bayesian framework for protein interactome analysis.* Manuscript in preparation.
 
 ## License
 
-BayesInteractomics.jl is released under the MIT License. See [LICENSE](LICENSE) for details.
+BayesInteractomics.jl is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
 This package builds on excellent Julia packages including:
-- [RxInfer.jl](https://github.com/reactivebayes/RxInfer.jl) for Bayesian inference
-- [Copulas.jl](https://github.com/lrnv/Copulas.jl) for copula modeling
-- [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) for probability distributions
-- [DataFrames.jl](https://github.com/JuliaData/DataFrames.jl) for data manipulation
+
+- [RxInfer.jl](https://github.com/reactivebayes/RxInfer.jl) for Bayesian inference,
+- [Copulas.jl](https://github.com/lrnv/Copulas.jl) for copula modeling,
+- [Flux.jl](https://github.com/FluxML/Flux.jl) and [MLJ.jl](https://github.com/JuliaAI/MLJ.jl) for the deep-learning prior and metalearner,
+- [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) for probability distributions,
+- [DataFrames.jl](https://github.com/JuliaData/DataFrames.jl) for data manipulation.
 
 ## Contact
 
 For questions, suggestions, or collaboration inquiries:
+
 - **Author**: Manuel Seefelder
 - **Email**: manuel.seefelder@uni-ulm.de
 - **GitHub**: [https://github.com/ma-seefelder/BayesInteractomics.jl](https://github.com/ma-seefelder/BayesInteractomics.jl)

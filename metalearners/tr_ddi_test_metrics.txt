@@ -1,0 +1,17 @@
+# Held-out test metrics for schema tr_ddi (calibrated)
+schema_tag = :tr_ddi
+n_features = 14
+n_test = 1862
+AUC = 0.8435153159695018
+MCC = 0.5361298021545055
+ECE_raw_per_bin = 0.2050764877009477
+ECE_calibrated_per_bin = 0.016363922737681672
+Brier = 0.14666549027241502
+tuning_measure = BrierLoss()
+model = MLJ.Stack (6 fixed-HP base learners + LR_L2 metalearner) + post-hoc calibrator
+calibrator_method = isotonic
+calibrator_ece_val_raw = 0.17918149617067014
+calibrator_ece_val_platt = 0.7286405149220853
+calibrator_ece_val_isotonic = 0.01068457194733954
+stack_nfolds = 5
+data_split = Stack on train; calibrator on val; ECE on test

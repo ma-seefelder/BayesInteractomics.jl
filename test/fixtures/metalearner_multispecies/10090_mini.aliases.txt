@@ -1,0 +1,3 @@
+#string_protein_id	alias	source
+10090.ENSMUSP00000B1	Q33333	Ensembl_UniProt
+10090.ENSMUSP00000B2	Q44444	Ensembl_UniProt

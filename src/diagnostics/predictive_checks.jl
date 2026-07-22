@@ -58,15 +58,14 @@ function model_diagnostics(
     a_0, b_0 = τ_dist.α, τ_dist.θ
     μ_0, σ_0 = μ0(data)
 
+    cached_hbm_prior = precompute_enrichment_prior(data; μ_0=μ_0, σ_0=σ_0, a_0=a_0, b_0=b_0)
     if getNoProtocols(data) == 1
-        cached_hbm_prior = precompute_HBM_single_protocol_prior(data, μ_0=μ_0, σ_0=σ_0, a_0=a_0, b_0=b_0)
         if regression_likelihood == :robust_t
             cached_regression_prior = precompute_regression_one_protocol_robust_prior(data, refID, μ_0, σ_0; nu=student_t_nu, τ_base=robust_tau_base)
         else
             cached_regression_prior = precompute_regression_one_protocol_prior(data, refID, μ_0, σ_0)
         end
     else
-        cached_hbm_prior = precompute_HBM_prior(data, μ_0=μ_0, σ_0=σ_0, a_0=a_0, b_0=b_0)
         if regression_likelihood == :robust_t
             cached_regression_prior = precompute_regression_multi_protocol_robust_prior(data, refID, μ_0, σ_0; nu=student_t_nu, τ_base=robust_tau_base)
         else
@@ -303,7 +302,11 @@ Strategy `:top_and_random` picks top N/2 by combined BF + N/2 random.
 """
 function _select_proteins_for_ppc(cr::DataFrame, config::DiagnosticsConfig, rng::AbstractRNG)
     n_proteins = nrow(cr)
-    n_check = min(config.n_proteins_to_check, n_proteins)
+    # 0 means all proteins
+    n_check = config.n_proteins_to_check <= 0 ? n_proteins : min(config.n_proteins_to_check, n_proteins)
+
+    # Short-circuit: if checking all, return all indices
+    n_check >= n_proteins && return collect(1:n_proteins)
 
     if config.ppc_protein_selection == :top_and_random
         n_top = div(n_check, 2)
@@ -829,12 +832,26 @@ function _merge_diagnostics_to_results(
         if !isempty(sensitivity.classification_stability)
             stab_cols = intersect(
                 ["Protein", "frac_P_gt_0_5", "frac_P_gt_0_8", "frac_P_gt_0_95",
-                 "frac_q_lt_0_05", "frac_q_lt_0_01"],
+                 "frac_BFDR_lt_0_05", "frac_BFDR_lt_0_01", "threshold_crossing_0_5"],
                 names(sensitivity.classification_stability)
             )
             if "Protein" in stab_cols && length(stab_cols) > 1
                 stab_df = sensitivity.classification_stability[:, stab_cols]
                 merged = leftjoin(merged, stab_df, on = :Protein)
+            end
+
+            # Derive traffic-light classification_stability column
+            if "threshold_crossing_0_5" in names(merged) && "frac_P_gt_0_5" in names(merged)
+                merged.classification_stability = map(eachrow(merged)) do row
+                    ismissing(row.threshold_crossing_0_5) && return missing
+                    if row.threshold_crossing_0_5
+                        "fragile"
+                    elseif row.frac_P_gt_0_5 == 1.0 || row.frac_P_gt_0_5 == 0.0
+                        "robust"
+                    else
+                        "sensitive"
+                    end
+                end
             end
         end
     end
@@ -857,8 +874,7 @@ Generate a Markdown report summarizing posterior predictive checks and model dia
 - `ppc_histogram_file::String`: Path to PPC histogram plot (for embedding)
 - `qq_plot_file::String`: Path to HBM Q-Q plot (for embedding)
 - `regression_qq_plot_file::String`: Path to Regression Q-Q plot (for embedding)
-- `calibration_plot_file::String`: Path to single calibration plot (for embedding)
-- `calibration_comparison_file::String`: Path to calibration comparison plot (preferred over single)
+- `calibration_plot_file::String`: Path to calibration plot (for embedding)
 - `pit_histogram_file::String`: Path to PIT histogram plot (for embedding)
 - `scale_location_hbm_file::String`: Path to HBM scale-location plot (for embedding)
 - `scale_location_regression_file::String`: Path to regression scale-location plot (for embedding)
@@ -875,7 +891,6 @@ function generate_diagnostics_report(
     qq_plot_file::String = "",
     regression_qq_plot_file::String = "",
     calibration_plot_file::String = "",
-    calibration_comparison_file::String = "",
     pit_histogram_file::String = "",
     scale_location_hbm_file::String = "",
     scale_location_regression_file::String = "",
@@ -1074,12 +1089,8 @@ function generate_diagnostics_report(
         end
     end
 
-    # Embed calibration plot (prefer comparison plot over single-line)
-    if !isempty(calibration_comparison_file) && isfile(calibration_comparison_file)
-        rel = _relative_plot_path(filename, calibration_comparison_file)
-        println(io, "![Calibration Comparison]($rel)")
-        println(io)
-    elseif !isempty(calibration_plot_file) && isfile(calibration_plot_file)
+    # Embed calibration plot
+    if !isempty(calibration_plot_file) && isfile(calibration_plot_file)
         rel = _relative_plot_path(filename, calibration_plot_file)
         println(io, "![Calibration Plot]($rel)")
         println(io)
@@ -1256,7 +1267,7 @@ function generate_diagnostics_report(
 
     # Write to file
     open(filename, "w") do f
-        write(f, content)
+        Base.write(f, content)
     end
 
     return content

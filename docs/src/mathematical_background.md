@@ -27,17 +27,17 @@ A Bayes factor compares the evidence for two hypotheses:
 BF_{10} = \frac{P(D | H_1)}{P(D | H_0)} = \frac{\text{Evidence for } H_1}{\text{Evidence for } H_0}
 ```
 
-where $H_1$ is the hypothesis of genuine interaction, $H_0$ is the null hypothesis (no interaction), and $D$ is the observed data.
+where:
+- $H_1$: Hypothesis of genuine interaction
+- $H_0$: Null hypothesis (no interaction)
+- $D$: Observed data
 
 **Interpretation**:
-
-| Condition | Interpretation |
-|-----------|---------------|
-| $BF_{10} > 1$ | Data favor interaction |
-| $BF_{10} = 1$ | Data equally support both hypotheses |
-| $BF_{10} < 1$ | Data favor null hypothesis |
-| $BF_{10} > 10$ | Strong evidence for interaction |
-| $BF_{10} > 100$ | Very strong evidence for interaction |
+- $BF_{10} > 1$: Data favor interaction
+- $BF_{10} = 1$: Data equally support both hypotheses
+- $BF_{10} < 1$: Data favor null hypothesis
+- $BF_{10} > 10$: Strong evidence for interaction
+- $BF_{10} > 100$: Very strong evidence for interaction
 
 Bayes factors provide a continuous measure of evidence that naturally accounts for uncertainty and doesn't require arbitrary significance thresholds.
 
@@ -49,15 +49,19 @@ Genuine interactors should be consistently detected in samples but rarely (or ne
 
 ### Model Specification
 
-For a protein, let $n_s$ be the number of sample replicates, $n_c$ the number of control replicates, $k_s$ the number of samples where the protein is detected, and $k_c$ the number of controls where the protein is detected.
+For a protein, let:
+- $n_s$ = number of sample replicates
+- $n_c$ = number of control replicates
+- $k_s$ = number of samples where protein is detected
+- $k_c$ = number of controls where protein is detected
 
 We model detection as Bernoulli trials:
 
 ```math
-\begin{aligned}
-k_s &\sim \text{Binomial}(n_s, \theta_s) \\
-k_c &\sim \text{Binomial}(n_c, \theta_c)
-\end{aligned}
+k_s \sim \text{Binomial}(n_s, \theta_s)
+```
+```math
+k_c \sim \text{Binomial}(n_c, \theta_c)
 ```
 
 where $\theta_s$ and $\theta_c$ are the true detection rates in samples and controls, respectively.
@@ -67,10 +71,10 @@ where $\theta_s$ and $\theta_c$ are the true detection rates in samples and cont
 We use weakly informative Beta priors for both detection rates:
 
 ```math
-\begin{aligned}
-\theta_s &\sim \text{Beta}(3, 3) \\
-\theta_c &\sim \text{Beta}(3, 3)
-\end{aligned}
+\theta_s \sim \text{Beta}(3, 3)
+```
+```math
+\theta_c \sim \text{Beta}(3, 3)
 ```
 
 The Beta(3,3) prior is centered at 0.5 with moderate uncertainty, expressing weak prior belief that detection rates are neither very low nor very high.
@@ -80,15 +84,17 @@ The Beta(3,3) prior is centered at 0.5 with moderate uncertainty, expressing wea
 Due to conjugacy of the Beta-Binomial model, posteriors are analytical:
 
 ```math
-\begin{aligned}
-\theta_s | D &\sim \text{Beta}(3 + k_s, 3 + (n_s - k_s)) \\
-\theta_c | D &\sim \text{Beta}(3 + k_c, 3 + (n_c - k_c))
-\end{aligned}
+\theta_s | D \sim \text{Beta}(3 + k_s, 3 + (n_s - k_s))
+```
+```math
+\theta_c | D \sim \text{Beta}(3 + k_c, 3 + (n_c - k_c))
 ```
 
 ### Bayes Factor Computation
 
-We test the one-sided hypothesis $H_1\colon \theta_s > \theta_c$ (detection rate higher in samples) against $H_0\colon \theta_s \leq \theta_c$ (detection rate not higher).
+We test the one-sided hypothesis:
+- $H_1$: $\theta_s > \theta_c$ (detection rate higher in samples)
+- $H_0$: $\theta_s \leq \theta_c$ (detection rate not higher)
 
 The posterior probability is estimated via Monte Carlo:
 
@@ -123,7 +129,10 @@ Genuine interactors should show **quantitative enrichment** in samples compared 
 
 ### Model Specification
 
-Let $y_{pej}$ denote the log-transformed intensity for protocol $p \in \{1, \ldots, P\}$, experiment $e \in \{1, \ldots, E_p\}$ within protocol $p$, and sample $j$ (either control or bait).
+Let $y_{pej}$ denote the log-transformed intensity for:
+- Protocol $p \in \{1, \ldots, P\}$
+- Experiment $e \in \{1, \ldots, E_p\}$ within protocol $p$
+- Sample $j$ (either control or bait)
 
 #### Likelihood
 
@@ -138,13 +147,16 @@ where $\mu_{pe}$ is the mean intensity and $\sigma^2_{pe}$ is the variance for e
 **Protocol-level parameters** (shared across experiments within a protocol):
 
 ```math
-\begin{aligned}
-\mu_{pe}^{\text{control}} | \mu_p^0, \tau_p^2 &\sim \mathcal{N}(\mu_p^0, \tau_p^2) \\
-\mu_{pe}^{\text{sample}} | \mu_p^0, \log_2 FC_p, \tau_p^2 &\sim \mathcal{N}(\mu_p^0 + \log_2 FC_p, \tau_p^2)
-\end{aligned}
+\mu_{pe}^{\text{control}} | \mu_p^0, \tau_p^2 \sim \mathcal{N}(\mu_p^0, \tau_p^2)
+```
+```math
+\mu_{pe}^{\text{sample}} | \mu_p^0, \log_2 FC_p, \tau_p^2 \sim \mathcal{N}(\mu_p^0 + \log_2 FC_p, \tau_p^2)
 ```
 
-where $\mu_p^0$ is the baseline intensity for protocol $p$, $\log_2 FC_p$ is the log2 fold change for protocol $p$ (parameter of interest), and $\tau_p^2$ is the between-experiment variance within protocol $p$.
+where:
+- $\mu_p^0$: Baseline intensity for protocol $p$
+- $\log_2 FC_p$: Log2 fold change for protocol $p$ (parameter of interest)
+- $\tau_p^2$: Between-experiment variance within protocol $p$
 
 **Experiment-level variance**:
 
@@ -174,7 +186,10 @@ where $\bar{y}_{pe}^{\text{control}}$ is the empirical mean of control samples.
 \tau_p^2 = \max\left(\sigma_p^2 - \bar{\sigma}^2_{pe}, \epsilon\right)
 ```
 
-where $\sigma_p^2$ is the empirical variance of experiment means, $\bar{\sigma}^2_{pe}$ is the average within-experiment variance, and $\epsilon = 10^{-6}$ prevents numerical issues.
+where:
+- $\sigma_p^2$ is the empirical variance of experiment means
+- $\bar{\sigma}^2_{pe}$ is the average within-experiment variance
+- $\epsilon = 10^{-6}$ prevents numerical issues
 
 **Within-experiment variance** (conjugate prior):
 
@@ -191,7 +206,9 @@ Posterior inference is performed using **variational Bayes** via RxInfer.jl, whi
 
 ### Bayes Factor Computation
 
-The Bayes factor for enrichment tests $H_1\colon \log_2 FC_p > 0$ (enrichment in samples) against $H_0\colon \log_2 FC_p \leq 0$ (no enrichment).
+The Bayes factor for enrichment tests:
+- $H_1$: $\log_2 FC_p > 0$ (enrichment in samples)
+- $H_0$: $\log_2 FC_p \leq 0$ (no enrichment)
 
 From the posterior distribution $q(\log_2 FC_p | D)$:
 
@@ -217,9 +234,12 @@ This assumes conditional independence of protocols given the hypothesis.
 
 Genuine interactors often show a **dose-response relationship**: their abundance correlates with the bait protein's abundance. If bait expression varies across samples (e.g., due to transfection efficiency), true interactors should track these variations, while contaminants should not.
 
-### Model Specification (Normal Likelihood)
+### Model Specification
 
-Let $y_i$ be the candidate protein intensity in sample $i$, $x_i$ the bait protein (reference) intensity in sample $i$, and $i \in \{1, \ldots, N\}$ the sample indices.
+Let:
+- $y_i$: Candidate protein intensity in sample $i$
+- $x_i$: Bait protein (reference) intensity in sample $i$
+- $i \in \{1, \ldots, N\}$: Sample indices
 
 #### Likelihood
 
@@ -227,7 +247,10 @@ Let $y_i$ be the candidate protein intensity in sample $i$, $x_i$ the bait prote
 y_i | \beta_0, \beta_1, \sigma^2 \sim \mathcal{N}(\beta_0 + \beta_1 x_i, \sigma^2)
 ```
 
-where $\beta_0$ is the intercept, $\beta_1$ is the slope (correlation strength — parameter of interest), and $\sigma^2$ is the residual variance.
+where:
+- $\beta_0$: Intercept
+- $\beta_1$: Slope (correlation strength - parameter of interest)
+- $\sigma^2$: Residual variance
 
 #### Priors
 
@@ -257,15 +280,17 @@ When multiple protocols are present, we use protocol-specific slopes $\beta_{1p}
 \beta_{1p} | \mu_{\beta}, \tau_{\beta}^2 \sim \mathcal{N}(\mu_{\beta}, \tau_{\beta}^2)
 ```
 
-where $\mu_{\beta}$ is the population mean slope (overall correlation) and $\tau_{\beta}^2$ is the between-protocol variance in slopes.
+where:
+- $\mu_{\beta}$: Population mean slope (overall correlation)
+- $\tau_{\beta}^2$: Between-protocol variance in slopes
 
 **Hyperpriors**:
 
 ```math
-\begin{aligned}
-\mu_{\beta} &\sim \mathcal{N}(0, 10) \\
-\tau_{\beta}^2 &\sim \text{Gamma}(1, 1)
-\end{aligned}
+\mu_{\beta} \sim \mathcal{N}(0, 10)
+```
+```math
+\tau_{\beta}^2 \sim \text{Gamma}(1, 1)
 ```
 
 ### Inference
@@ -274,7 +299,9 @@ Posterior inference uses variational Bayes via RxInfer.jl, yielding posterior di
 
 ### Bayes Factor Computation
 
-The Bayes factor tests $H_1\colon \beta_1 > 0$ (positive correlation with bait) against $H_0\colon \beta_1 \leq 0$ (no positive correlation).
+The Bayes factor tests:
+- $H_1$: $\beta_1 > 0$ (positive correlation with bait)
+- $H_0$: $\beta_1 \leq 0$ (no positive correlation)
 
 ```math
 BF_{10} = \frac{P(\beta_1 > 0 | D)}{P(\beta_1 \leq 0 | D)} = \frac{p}{1-p}
@@ -288,119 +315,20 @@ For multiple protocols:
 BF_{\text{correlation}} = \prod_{p=1}^{P} BF_p
 ```
 
-### Robust Extension: Student-t via Scale Mixture
-
-The standard Normal likelihood assumes homogeneous residual variance, making the regression sensitive to outliers. Proteomics data frequently contain aberrant intensity values caused by misidentifications, interference, or carry-over. A **robust regression** replaces the Normal likelihood with a heavier-tailed Student-t distribution, implemented through a Normal–Gamma scale mixture that is fully compatible with variational message passing.
-
-#### Scale-Mixture Representation
-
-Each observation receives its own precision $\tau_i$, drawn from a Gamma distribution:
-
-```math
-\begin{aligned}
-\tau_i &\sim \text{Gamma}\!\left(\frac{\nu}{2},\; \text{scale} = \frac{\tau_{\text{base}}}{\nu/2}\right), \quad \mathbb{E}[\tau_i] = \tau_{\text{base}} \\
-y_i \mid \mu_i, \tau_i &\sim \mathcal{N}(\mu_i,\; \text{precision} = \tau_i)
-\end{aligned}
-```
-
-Marginalizing over $\tau_i$ recovers a Student-t distribution:
-
-```math
-y_i \mid \mu_i \;\sim\; \text{Student-}t\!\left(\nu,\; \mu_i,\; \tau_{\text{base}}\right)
-```
-
-The degrees-of-freedom parameter $\nu$ controls tail heaviness: smaller $\nu$ yields heavier tails and greater outlier robustness; as $\nu \to \infty$ the model reduces to Normal regression.
-
-#### Hierarchical Prior Structure
-
-The prior structure is identical to the Normal model. For the multi-protocol case:
-
-| Parameter | Prior |
-|-----------|-------|
-| $\mu_\alpha$ (hyper-mean intercept) | $\mathcal{N}(0,\; (0.3/1.96)^2)$ |
-| $\mu_\beta$ (hyper-mean slope) | $\mathcal{N}(\hat{\mu}_0,\; \sigma_0^2)$ |
-| $\sigma_\alpha$ (hyper-precision intercept) | $\text{Gamma}(6.304,\; \text{scale}=7.932)$ |
-| $\sigma_\beta$ (hyper-precision slope) | $\text{Gamma}(10,\; \text{scale}=0.3)$ |
-| $\alpha_k$ (per-protocol intercept) | $\mathcal{N}(\mu_\alpha,\; \text{precision}=\sigma_\alpha)$ |
-| $\beta_k$ (per-protocol slope) | $\mathcal{N}(\mu_\beta,\; \text{precision}=\sigma_\beta)$ |
-
-The empirical Bayes hyperparameters $\hat{\mu}_0$ and $\sigma_0^2$ are estimated from OLS on the pooled data, identical to the Normal model.
-
-#### Empirical Bayes for $\tau_{\text{base}}$
-
-The baseline precision is set to the inverse residual variance from an OLS fit:
-
-```math
-\tau_{\text{base}} = \frac{1}{\text{Var}(\hat{\varepsilon}_{\text{OLS}})}
-```
-
-This anchors the Student-t scale to the data, ensuring that $\mathbb{E}[\tau_i] = \tau_{\text{base}}$ matches the observed noise level.
-
-#### Default Configuration
-
-The degrees-of-freedom parameter defaults to $\nu = 5$, which provides moderately heavy tails. When model comparison is enabled (see next section), $\nu$ is optimized over $[3, 50]$ by minimizing WAIC.
-
-## Model Comparison via WAIC
-
-The Widely Applicable Information Criterion (WAIC; Watanabe, 2010) provides a principled method for comparing the Normal and robust (Student-t) regression models. Unlike AIC or BIC, WAIC is fully Bayesian and uses the entire posterior distribution rather than a point estimate.
-
-### WAIC Definition
-
-Given $S$ posterior draws $\theta^{(1)}, \ldots, \theta^{(S)}$ and $n$ observations, WAIC is defined as:
-
-```math
-\text{WAIC} = -2\left(\text{lppd} - p_{\text{waic}}\right)
-```
-
-where the **log pointwise predictive density** and the **effective number of parameters** are:
-
-```math
-\begin{aligned}
-\text{lppd} &= \sum_{i=1}^{n} \log\!\left(\frac{1}{S} \sum_{s=1}^{S} p(y_i \mid \theta^{(s)})\right) \\
-p_{\text{waic}} &= \sum_{i=1}^{n} \text{Var}_{s}\!\left(\log p(y_i \mid \theta^{(s)})\right)
-\end{aligned}
-```
-
-Lower WAIC indicates better out-of-sample predictive performance. The implementation uses $S = 1000$ posterior draws from the VMP approximate posteriors.
-
-### Normal vs Robust Regression Comparison
-
-To compare the two regression models, we compute WAIC for each and take the difference:
-
-```math
-\Delta\text{WAIC} = \text{WAIC}_{\text{normal}} - \text{WAIC}_{\text{robust}}
-```
-
-A positive $\Delta\text{WAIC}$ favors the robust model (lower WAIC). The standard error of the difference is estimated from pointwise WAIC differences:
-
-```math
-\text{SE}_\Delta = \sqrt{n \cdot \text{Var}(w_i^{\text{normal}} - w_i^{\text{robust}})}
-```
-
-where $w_i$ denotes the pointwise WAIC contribution of observation $i$. When $|\Delta\text{WAIC}| > 2 \cdot \text{SE}_\Delta$, the difference is considered meaningful (Vehtari et al., 2017).
-
-### Degrees-of-Freedom Optimization
-
-When the robust model is selected, the degrees-of-freedom parameter $\nu$ can be optimized to minimize WAIC. BayesInteractomics uses **Brent's method** to search over $\nu \in [3, 50]$ with a tolerance of 0.5 (finer precision is not meaningful given WAIC uncertainty). A fixed random seed ensures a deterministic, smooth objective surface for the optimizer.
-
-The optimization procedure:
-1. Compute WAIC for the Normal model once (baseline).
-2. For each candidate $\nu$, fit the robust model across all proteins and compute WAIC.
-3. Return the $\nu$ that minimizes WAIC, along with the $\Delta\text{WAIC}$ relative to the Normal baseline.
-
-## Evidence Combination
+## Evidence Combination via Copulas
 
 ### The Combination Problem
 
-We now have three Bayes factors for each protein: $BF_{\text{detection}}$ (detection evidence), $BF_{\text{enrichment}}$ (enrichment evidence), and $BF_{\text{correlation}}$ (correlation evidence).
+We now have three Bayes factors for each protein:
+- Detection evidence ($BF_{\text{detection}}$)
+- Enrichment evidence ($BF_{\text{enrichment}}$)
+- Correlation evidence ($BF_{\text{correlation}}$)
 
 These are **not independent**: for example, enriched proteins are more likely to be consistently detected. Simple multiplication (independence assumption) would be incorrect.
 
-**Solution**: Model the joint distribution of Bayes factors using **copulas**, which flexibly capture dependencies while allowing arbitrary marginals. BayesInteractomics also provides a **latent class model** and **Bayesian model averaging** across both combination methods.
+**Solution**: Model the joint distribution of Bayes factors using **copulas**, which flexibly capture dependencies while allowing arbitrary marginals.
 
-### Copula-Based Combination
-
-#### Copula Theory
+### Copula Theory
 
 A copula $C$ is a multivariate distribution on $[0,1]^d$ with uniform marginals. By Sklar's theorem, any multivariate distribution $F$ can be decomposed as:
 
@@ -410,42 +338,51 @@ F(x_1, \ldots, x_d) = C(F_1(x_1), \ldots, F_d(x_d))
 
 where $F_i$ are the marginal distributions and $C$ is the copula capturing dependence.
 
-#### Mixture Copula Model
+### Mixture Copula Model
 
 The distribution of Bayes factors arises from a mixture of two populations:
-- **$H_0$ population**: Non-interacting proteins (null hypothesis true)
-- **$H_1$ population**: Genuine interactors (alternative hypothesis true)
+- **H0 population** ($H_0$): Non-interacting proteins (null hypothesis true)
+- **H1 population** ($H_1$): Genuine interactors (alternative hypothesis true)
 
 Let $\mathbf{BF} = (BF_{\text{detection}}, BF_{\text{enrichment}}, BF_{\text{correlation}})$ be the triplet of Bayes factors.
 
-**Mixture model**:
+#### Mixture Model
 
 ```math
 F(\mathbf{BF}) = \pi_0 \cdot F_{H_0}(\mathbf{BF}) + \pi_1 \cdot F_{H_1}(\mathbf{BF})
 ```
 
-where $\pi_0$ is the proportion of non-interactors, $\pi_1 = 1 - \pi_0$ is the proportion of true interactors, $F_{H_0}$ is the joint distribution under $H_0$ (modeled by copula $C_0$), and $F_{H_1}$ is the joint distribution under $H_1$ (modeled by copula $C_1$).
+where:
+- $\pi_0$: Proportion of non-interactors
+- $\pi_1 = 1 - \pi_0$: Proportion of true interactors
+- $F_{H_0}$: Joint distribution under $H_0$ (modeled by copula $C_0$)
+- $F_{H_1}$: Joint distribution under $H_1$ (modeled by copula $C_1$)
 
-**Copula specification** — for each component $k \in \{0, 1\}$:
+#### Copula Specification
+
+For each component $k \in \{0, 1\}$:
 
 ```math
 F_{H_k}(\mathbf{BF}) = C_k\left(G_1(BF_{\text{detection}}), G_2(BF_{\text{enrichment}}), G_3(BF_{\text{correlation}})\right)
 ```
 
-where $C_k$ is the copula for component $k$ (e.g., Clayton, Gumbel, Frank, Gaussian) and $G_i$ is the marginal cumulative distribution for evidence type $i$.
+where:
+- $C_k$: Copula for component $k$ (e.g., Clayton, Gumbel, Frank, Gaussian)
+- $G_i$: Marginal cumulative distribution for evidence type $i$
 
-BayesInteractomics supports multiple copula families:
+BayesInteractomics fits exactly four single-parameter copula families:
 - **Clayton**: Models lower tail dependence (joint low values)
-- **Gumbel**: Models upper tail dependence (joint high values)
 - **Frank**: Symmetric dependence
+- **Gumbel**: Models upper tail dependence (joint high values)
 - **Gaussian**: Linear correlation structure
-- **Joe**: Asymmetric upper tail dependence
 
-#### EM Algorithm
+### Expectation-Maximization (EM) Algorithm
 
 The mixture model parameters $\Theta = \{\pi_0, \pi_1, C_0, C_1, G_1, G_2, G_3\}$ are estimated using the EM algorithm.
 
-**E-Step** — compute posterior probability that protein $i$ belongs to $H_1$:
+#### E-Step
+
+Compute posterior probability that protein $i$ belongs to $H_1$:
 
 ```math
 \gamma_i^{(t)} = \frac{\pi_1^{(t)} \cdot f_{H_1}(\mathbf{BF}_i | \Theta^{(t)})}{\pi_0^{(t)} \cdot f_{H_0}(\mathbf{BF}_i | \Theta^{(t)}) + \pi_1^{(t)} \cdot f_{H_1}(\mathbf{BF}_i | \Theta^{(t)})}
@@ -453,33 +390,39 @@ The mixture model parameters $\Theta = \{\pi_0, \pi_1, C_0, C_1, G_1, G_2, G_3\}
 
 where $f_{H_k}$ is the density corresponding to $F_{H_k}$.
 
-**M-Step** — update parameters to maximize expected complete-data log-likelihood:
+#### M-Step
 
-Mixture weights:
+Update parameters to maximize expected complete-data log-likelihood:
+
+**Mixture weights**:
 
 ```math
 \pi_1^{(t+1)} = \frac{1}{N} \sum_{i=1}^{N} \gamma_i^{(t)}
 ```
 
-Copula parameters: fit $C_0$ and $C_1$ using weighted data — $C_0$ is fit to proteins with weights $(1 - \gamma_i^{(t)})$ and $C_1$ is fit to proteins with weights $\gamma_i^{(t)}$.
+**Copula parameters**: Fit $C_0$ and $C_1$ using weighted data:
+- $C_0$ fit to proteins with weights $(1 - \gamma_i^{(t)})$
+- $C_1$ fit to proteins with weights $\gamma_i^{(t)}$
 
-Marginals: fit $G_1, G_2, G_3$ using kernel density estimation or empirical CDFs.
+**Marginals**: Fit $G_1, G_2, G_3$ using kernel density estimation or empirical CDFs.
 
-**Initialization**:
+#### Initialization
 
-- The **$H_0$ component** is initialized using proteins with all Bayes factors < 1 (strong evidence against interaction)
-- The **$H_1$ component** is initialized using proteins with all Bayes factors > threshold (e.g., > 3)
-- The **mixture weight** is set to $\pi_1^{(0)} = 0.1$ (conservative initial estimate)
+- **H0 initialization**: Use proteins with all Bayes factors < 1 (strong evidence against interaction)
+- **H1 initialization**: Use proteins with all Bayes factors > threshold (e.g., > 3)
+- **Mixture weight**: $\pi_1^{(0)} = 0.1$ (conservative initial estimate)
 
-**Convergence** — iterate E-step and M-step until:
+#### Convergence
+
+Iterate E-step and M-step until:
 
 ```math
 \frac{|\pi_1^{(t+1)} - \pi_1^{(t)}|}{|\pi_1^{(t)}|} < \epsilon
 ```
 
-Typically $\epsilon = 10^{-4}$ and convergence occurs in 10–50 iterations.
+Typically $\epsilon = 10^{-4}$ and convergence occurs in 10-50 iterations.
 
-#### Combined Bayes Factor
+### Combined Bayes Factor
 
 After EM convergence, the combined Bayes factor for protein $i$ is:
 
@@ -489,7 +432,7 @@ BF_{\text{combined},i} = \frac{f_{H_1}(\mathbf{BF}_i)}{f_{H_0}(\mathbf{BF}_i)}
 
 This is the likelihood ratio using the fitted copula densities.
 
-#### Posterior Probability
+### Posterior Probability
 
 Assuming uniform prior $P(H_1) = 0.5$, the posterior probability of interaction is:
 
@@ -503,117 +446,394 @@ Alternatively, using the EM-estimated mixture proportion:
 P(H_1 | \mathbf{BF}_i) = \gamma_i
 ```
 
-### Latent Class Model
+## Log-Bayes Factor Scale
 
-The latent class model is a simpler alternative to copula-based combination that models the joint distribution of log-Bayes factors directly as a Gaussian mixture. It assumes **conditional independence** of the three evidence arms given the latent interaction status, which trades flexibility in dependence modeling for computational simplicity and robustness.
+### Motivation
 
-#### Model Specification
-
-Each protein has a latent class $z_i \in \{0, 1\}$ indicating Background or Interaction status. The three-dimensional score vector $\mathbf{s}_i = (\log BF_{\text{enrich},i},\; \log BF_{\text{corr},i},\; \log BF_{\text{detect},i})$ is modeled as:
+Before combining the three Bayes factors, all are transformed to the natural-log scale:
 
 ```math
-\begin{aligned}
-z_i &\sim \text{Categorical}(\pi_0, \pi_1), \quad \pi_0 + \pi_1 = 1 \\
-p(\mathbf{s}_i \mid z_i = k) &= \prod_{d=1}^{3} \mathcal{N}(s_{id} \mid \mu_{dk},\; \sigma^2_{dk})
-\end{aligned}
+\ell_i = \log(BF_i), \quad i \in \{\text{enrichment}, \text{correlation}, \text{detection}\}
 ```
 
-The conditional independence assumption means that each evidence dimension contributes independently to the class assignment, given the latent state. This is a 2-component, 3-dimensional Gaussian mixture with diagonal covariance.
+This transformation provides three key advantages:
 
-#### Data Preprocessing
+1. **Numerical stability**: Raw Bayes factors span many orders of magnitude ($10^{-6}$ to $10^{6}$). On the log scale, these become bounded values in $[-14, 14]$.
+2. **Additive interpretation**: Under independence, $\log(BF_1 \cdot BF_2) = \log(BF_1) + \log(BF_2)$, allowing additive reasoning about evidence.
+3. **Better-behaved marginals**: The EM algorithm fits mixture distributions to the log-BF triplets. Log-transformed Bayes factors are approximately symmetric and unimodal under $H_0$, enabling standard parametric families (Normal, Student-t) to capture the null distribution.
 
-Before EM fitting, Bayes factors are transformed and optionally winsorized:
+### Winsorization
 
-1. **Log-transform**: $s_{id} = \log(BF_{id})$. Log-Bayes factors are approximately Normal by the CLT, with $\log(BF) = 0$ representing no evidence.
-2. **Winsorization** (optional, default on): extreme values are clamped to the 1st and 99th percentiles. This protects the EM parameter estimates from extreme outliers. The original (non-winsorized) log-BFs are retained for posterior computation.
-
-#### EM Algorithm
-
-The EM algorithm iterates between responsibility computation and parameter updates:
-
-**E-Step** — for each protein $i$, compute the posterior probability of belonging to the interaction class:
+To prevent any single extreme protein from dominating the EM fit, log-BFs are winsorized:
 
 ```math
-\gamma_i = \frac{\pi_1 \prod_{d} \mathcal{N}(s_{id} \mid \mu_{d1}, \sigma^2_{d1})}{\pi_0 \prod_{d} \mathcal{N}(s_{id} \mid \mu_{d0}, \sigma^2_{d0}) + \pi_1 \prod_{d} \mathcal{N}(s_{id} \mid \mu_{d1}, \sigma^2_{d1})}
+\tilde{\ell}_i = \text{clamp}(\ell_i, -\log(BF_{\max}), \log(BF_{\max}))
 ```
 
-**M-Step** — update parameters using the responsibilities:
+where $BF_{\max} = 10^6$ by default. The EM operates on winsorized triplets $(\tilde{\ell}_e, \tilde{\ell}_c, \tilde{\ell}_d)$, while the original (non-winsorized) log-BFs are used for final posterior computation.
+
+## Three-Component Mixture Model
+
+The evidence combination uses a three-component mixture model on log-BF triplets:
 
 ```math
-\begin{aligned}
-\pi_k^{\text{new}} &= \frac{N_k + \alpha_k - 1}{N + \sum_j \alpha_j - 2}, \quad N_k = \sum_i \gamma_{ik} \\
-\mu_{dk}^{\text{new}} &= \frac{\sum_i \gamma_{ik} \, s_{id}}{N_k} \\
-\sigma_{dk}^{\text{new}} &= \max\!\left(\sqrt{\frac{\sum_i \gamma_{ik} (s_{id} - \mu_{dk})^2}{N_k}},\; \sigma_{\text{floor}}\right)
-\end{aligned}
+f(\mathbf{x}) = \pi_0 \cdot f_{H_0}(\mathbf{x}) + \pi_a \cdot f_{\text{agnostic}}(\mathbf{x}) + \pi_1 \cdot f_{H_1}(\mathbf{x})
 ```
 
-The mixing weights receive a Dirichlet prior with $\boldsymbol{\alpha} = (10, 1)$, encoding a prior expectation that most proteins are non-interactors.
+where $\mathbf{x} = (\ell_e, \ell_c, \ell_d)$ is the log-BF triplet and $\pi_0 + \pi_a + \pi_1 = 1$. The three components capture three qualitatively different protein populations.
 
-**Label ordering constraint**: after each M-step, if $\mu_{\text{enrich},1} < \mu_{\text{enrich},0}$, all parameters and responsibilities between the two components are swapped. This ensures the interaction class always has a higher mean enrichment score.
+### $H_0$ Component (Non-Interactors)
 
-**Convergence**: the algorithm terminates when the relative change in log-likelihood falls below $10^{-6}$, or after a maximum of 100 iterations.
-
-#### Posterior Computation and Monotonicity Correction
-
-Final posteriors are computed on the **original (non-winsorized)** log-BF values using the EM-fitted parameters. A monotonicity correction prevents proteins with extremely strong evidence from being penalized:
-
-For each dimension $d$, if $s_{id} > \mu_{d1}$ (the protein's score exceeds the interaction-class mean), the per-dimension log-likelihood ratio is floored at zero:
+Non-interacting proteins should have Bayes factors near 1 (log-BFs near 0), with occasional extreme negative values from random fluctuations. The enrichment marginal uses a **Student-t distribution** to capture these heavy tails:
 
 ```math
-\text{LLR}_d = \begin{cases}
-\log \frac{\mathcal{N}(s_{id} \mid \mu_{d1}, \sigma^2_{d1})}{\mathcal{N}(s_{id} \mid \mu_{d0}, \sigma^2_{d0})} & \text{if } s_{id} \leq \mu_{d1} \\[6pt]
-\max\!\left(\log \frac{\mathcal{N}(s_{id} \mid \mu_{d1}, \sigma^2_{d1})}{\mathcal{N}(s_{id} \mid \mu_{d0}, \sigma^2_{d0})},\; 0\right) & \text{if } s_{id} > \mu_{d1}
-\end{cases}
+f_{H_0,e}(x) = \text{LocationScale}(\mu_0, \sigma_0, t_\nu)
 ```
 
-The posterior probability is then:
+where $\nu$ is selected from $\{3, 5, 7, 10\}$ by minimizing the Bayesian Information Criterion (BIC) on the enrichment marginal. The heavy tails of the Student-t distribution capture extreme negative log-BFs (e.g., $\ell_e \approx -45$) without requiring a separate outlier component. A BIC margin of 2 is required for selecting Student-t over Normal.
+
+The correlation and detection marginals use Normal distributions:
 
 ```math
-P(z_i = 1 \mid \mathbf{s}_i) = \frac{1}{1 + \exp\!\left(-\log\frac{\pi_1}{\pi_0} - \sum_d \text{LLR}_d\right)}
+f_{H_0,c}(x) = \mathcal{N}(\mu_{0c}, \sigma_{0c}^2), \quad f_{H_0,d}(x) = \mathcal{N}(\mu_{0d}, \sigma_{0d}^2)
 ```
 
-### Bayesian Model Averaging (BMA)
-
-When both copula and latent class combination methods are available, Bayesian Model Averaging (BMA) provides a principled way to combine their posterior probabilities, weighting each method by how well it fits the data.
-
-#### BIC Computation and Model Weights
-
-The Bayesian Information Criterion approximates the log marginal likelihood for each combination model $m$:
+Under conditional independence given component membership, the joint $H_0$ density is:
 
 ```math
-\text{BIC}_m = -2 \log \hat{L}_m + k_m \log n
+f_{H_0}(\mathbf{x}) = f_{H_0,e}(\ell_e) \cdot f_{H_0,c}(\ell_c) \cdot f_{H_0,d}(\ell_d)
 ```
 
-where $\hat{L}_m$ is the maximized likelihood, $k_m$ is the number of parameters, and $n$ is the number of proteins.
+### Agnostic Component (Uninformative Proteins)
 
-The parameter counts are:
-
-| Model | Parameters | Total $k$ |
-|-------|-----------|-----------|
-| Copula | copula dependence params + 6 (H0 marginals) + 6 (H1 marginals) + 1 (mixing weight) | $k_{\text{cop}} + 13$ |
-| Latent class | 2 classes $\times$ 3 dims $\times$ 2 ($\mu, \sigma$) + 1 (mixing weight) | 13 |
-
-Model weights are computed from BIC differences:
+The agnostic component captures proteins with Bayes factors near 1 across all evidence types -- proteins for which the data are genuinely uninformative:
 
 ```math
-w_m = \frac{\exp(-\tfrac{1}{2}\,\Delta\text{BIC}_m)}{\sum_j \exp(-\tfrac{1}{2}\,\Delta\text{BIC}_j)}, \quad \Delta\text{BIC}_m = \text{BIC}_m - \min_j \text{BIC}_j
+f_{\text{ag},e}(x) = \mathcal{N}(0, \sigma_{ae}^2), \quad f_{\text{ag},c}(x) = \mathcal{N}(\mu_{ac}, \sigma_{ac}^2), \quad f_{\text{ag},d}(x) = \mathcal{N}(\mu_{ad}, \sigma_{ad}^2)
 ```
 
-#### Averaged Posterior
+The enrichment mean is **anchored at zero** ($\mu_{ae} = 0$, not a free parameter), ensuring this component does not drift toward either $H_0$ or $H_1$ during EM fitting. Without this anchor, $H_0$ and agnostic components can become redundant (identical distributions), wasting a mixture component.
 
-The model-averaged posterior probability for each protein is a weighted combination:
+### Redundancy Detection
+
+After EM convergence, a KL divergence check detects whether $H_0$ and agnostic components have collapsed to nearly identical distributions:
 
 ```math
-P_{\text{avg}}(H_1 \mid D_i) = w_{\text{copula}} \cdot P_{\text{copula}}(H_1 \mid D_i) + w_{\text{lc}} \cdot P_{\text{lc}}(H_1 \mid D_i)
+D_{\text{KL}}(f_{H_0} \| f_{\text{ag}}) < 0.1 \implies \text{merge components}
 ```
 
-The averaged Bayes factor is derived from the averaged posterior:
+If merging is triggered, the agnostic weight is set to $\pi_a = 0$ and its mass is absorbed by $H_0$ via weighted averaging, preserving the 3-component structure for backward compatibility.
+
+### $H_1$ Component (Interactors)
+
+The $H_1$ enrichment marginal must enforce that genuine interactors have **substantial enrichment evidence**. A smooth sigmoid transition replaces a hard cutoff at the Jeffreys threshold:
 
 ```math
-BF_{\text{avg},i} = \frac{P_{\text{avg}} / (1 - P_{\text{avg}})}{\pi_1 / \pi_0}
+w(x) = \frac{1}{1 + e^{-k(x - \text{JEFFREYS\_SHIFT})}}
 ```
 
-where $\pi_1 / \pi_0$ is the prior odds from the copula EM fit.
+where JEFFREYS\_SHIFT $= \ln(\sqrt{10}) \approx 1.151$ is Jeffreys' "substantial evidence" threshold and $k = 5.0$ is the sigmoid steepness.
+
+The H1 enrichment log-density combines a shifted positive distribution with the sigmoid gate:
+
+```math
+\log f_{H_1,e}(x) = \log g(x - \text{JEFFREYS\_SHIFT}) + \log w(x)
+```
+
+where $g$ is a positive-support distribution (e.g., Gamma, LogNormal, or Weibull) selected by BIC. At the shift point ($x = \text{JEFFREYS\_SHIFT}$), the sigmoid contributes $\log(0.5) \approx -0.69$ nats, providing a smooth rather than discontinuous penalty.
+
+The correlation and detection marginals for $H_1$ are shifted Normals:
+
+```math
+f_{H_1,c}(x) = \mathcal{N}(\mu_{1c}, \sigma_{1c}^2), \quad f_{H_1,d}(x) = \mathcal{N}(\mu_{1d}, \sigma_{1d}^2)
+```
+
+with $\mu_{1c} > \mu_{0c}$ and $\mu_{1d} > \mu_{0d}$ enforced by label-ordering constraints.
+
+### BIC-Selected $H_1$ Enrichment Family
+
+The positive-support distribution $g$ for the $H_1$ enrichment marginal is selected at EM iteration 5 from three candidate families:
+
+| Family | Support | Density shape |
+|--------|---------|---------------|
+| Gamma | $(0, \infty)$ | Flexible skewness |
+| LogNormal | $(0, \infty)$ | Heavy right tail |
+| Weibull | $(0, \infty)$ | Flexible hazard rate |
+
+The family with the lowest BIC on the shifted enrichment values ($x - \text{JEFFREYS\_SHIFT}$ for $H_1$-assigned proteins) is retained for the remainder of the EM.
+
+### EM Algorithm Details
+
+The EM algorithm includes several convergence guarantees:
+
+**Step-halving guard**: After the M-step applies parameter constraints (sigma floors/caps, mean constraints, label ordering), the log-likelihood is re-evaluated. If the constrained parameters decrease the log-likelihood, the update is reverted:
+
+```math
+\text{if } \mathcal{L}(\Theta^{(t+1)}_{\text{constrained}}) < \mathcal{L}(\Theta^{(t)}) - \epsilon \implies \Theta^{(t+1)} \leftarrow \Theta^{(t)}
+```
+
+where $\epsilon = 10^{-6}$ is a numerical noise threshold. This guarantees monotonic log-likelihood after the burn-in period.
+
+**Constraint ordering**: The M-step applies constraints in a canonical order to ensure deterministic behavior:
+1. Sigma floors and caps (data-dependent IQR-based bounds)
+2. Mean constraints (agnostic $\mu_e = 0$, label ordering)
+3. Label ordering ($\mu_{H_0,e} < \mu_{\text{ag},e} < \mu_{H_1,e}$)
+4. Single log-likelihood check with step-halving revert
+
+**Multiple restarts**: The EM is run from 20+ random initializations (quantile-based, k-means, and random) to avoid local optima. The restart with the highest converged log-likelihood is selected.
+
+**SQUAREM acceleration**: The Squared Iterative Methods algorithm (Varadhan and Roland, 2008) accelerates convergence by using quasi-Newton steps without explicit Hessian computation, achieving 2-10x speedup over standard EM.
+
+**Dirichlet prior**: Mixture weights are regularized with a Dirichlet prior $\text{Dir}(5.0, 2.0, 1.0)$, which biases toward $H_0$ (as expected biologically) and prevents component collapse.
+
+## Single-Copula-per-Component Structure
+
+### Sklar Construction
+
+The Copula sub-model represents each mixture component with a **single 3-D copula** over the enrichment, correlation, and detection dimensions -- it does **not** decompose the joint into a cascade of bivariate pieces. By Sklar's theorem, the joint density of a component's log-BF triplet factors into its marginals and one trivariate copula density:
+
+```math
+f_k(\ell_e, \ell_c, \ell_d) = c_k\big(G_{ke}(\ell_e), G_{kc}(\ell_c), G_{kd}(\ell_d)\big) \cdot f_{ke}(\ell_e) \cdot f_{kc}(\ell_c) \cdot f_{kd}(\ell_d)
+```
+
+where $c_k$ is the single 3-D copula density for component $k$, the $G_{kj}$ are the component marginal CDFs, and the $f_{kj}$ their densities.
+
+### Three-Component Mixture
+
+The Copula sub-model uses the same **three-component** structure introduced above ($H_0$ / anchored-agnostic / $H_1$), with one single 3-D copula per component:
+
+```math
+f(\ell_e, \ell_c, \ell_d) = \pi_0 \, f_0(\ell_e, \ell_c, \ell_d) + \pi_a \, f_a(\ell_e, \ell_c, \ell_d) + \pi_1 \, f_1(\ell_e, \ell_c, \ell_d)
+```
+
+Each $f_k$ is the Sklar product above. As with the latent-class model, the anchored-agnostic component keeps its enrichment mean fixed at zero so it cannot drift toward either $H_0$ or $H_1$ during fitting.
+
+### Four-Family BIC Selection
+
+For each component the trivariate copula family is selected by minimizing BIC over exactly four single-parameter families:
+
+| Family | Dependence captured |
+|--------|---------------------|
+| Clayton | Lower tail (joint low values) |
+| Frank | Symmetric |
+| Gumbel | Upper tail (joint high values) |
+| Gaussian | Linear correlation structure |
+
+Modeling each component with a single 3-D copula -- rather than assuming full conditional independence -- lets the combination retain residual dependence between the three evidence streams while remaining numerically stable and interpretable.
+
+## Latent Class Model
+
+### Formulation
+
+The latent class model provides an alternative to the copula approach by modeling the joint density of log-BF triplets directly as a multivariate mixture:
+
+```math
+f(\mathbf{x}) = \pi_0 \cdot \prod_{j=1}^{3} f_{0j}(x_j) + \pi_a \cdot \prod_{j=1}^{3} f_{aj}(x_j) + \pi_1 \cdot \prod_{j=1}^{3} f_{1j}(x_j)
+```
+
+where $x_j$ are the three log-BF dimensions (enrichment, correlation, detection) and $f_{kj}$ are the marginal densities for component $k$ and dimension $j$.
+
+### Difference from Copula Approach
+
+The latent class model assumes **conditional independence** of the three evidence streams given the latent class. This is a stronger assumption than the copula approach (which models residual dependence via copula functions), but it is computationally simpler and more numerically stable.
+
+### EM Algorithm for Latent Class
+
+**E-step**: Compute posterior membership probabilities:
+
+```math
+\gamma_{ik} = \frac{\pi_k \prod_{j=1}^{3} f_{kj}(x_{ij})}{\sum_{k'} \pi_{k'} \prod_{j=1}^{3} f_{k'j}(x_{ij})}
+```
+
+**M-step**: Update parameters using weighted sufficient statistics:
+
+```math
+\pi_k = \frac{\sum_i \gamma_{ik} + \alpha_k - 1}{N + \sum_k (\alpha_k - 1)}, \quad \mu_{kj} = \frac{\sum_i \gamma_{ik} x_{ij}}{\sum_i \gamma_{ik}}, \quad \sigma_{kj}^2 = \frac{\sum_i \gamma_{ik} (x_{ij} - \mu_{kj})^2}{\sum_i \gamma_{ik}}
+```
+
+where $\alpha_k$ are Dirichlet prior pseudocounts.
+
+### Adaptive Component Count
+
+After convergence, a KL divergence test checks whether the $H_0$ and agnostic components are effectively identical:
+
+```math
+D_{\text{KL}}(f_{H_0} \| f_{\text{ag}}) = \sum_j \left[ \log \frac{\sigma_{aj}}{\sigma_{0j}} + \frac{\sigma_{0j}^2 + (\mu_{0j} - \mu_{aj})^2}{2\sigma_{aj}^2} - \frac{1}{2} \right]
+```
+
+If $D_{\text{KL}} < 0.1$, the components are merged via weighted averaging.
+
+### Post-Hoc Bayes Factor Constraint
+
+To prevent pathological combined Bayes factors where all individual evidence streams favor $H_0$ but the combined BF favors $H_1$ (due to component assignment artifacts), a post-hoc constraint is applied:
+
+```math
+\text{if } BF_e < 1 \text{ and } BF_c < 1 \implies BF_{\text{combined}} \leq \max(BF_e, BF_c, BF_d)
+```
+
+This ensures that the combined evidence cannot exceed the strongest individual evidence when both enrichment and correlation disfavor interaction.
+
+## Bayesian Model Averaging
+
+### Motivation
+
+The copula and latent class models make different structural assumptions about evidence dependence. Rather than choosing one, BayesInteractomics combines them via **Bayesian Model Averaging (BMA)** using LOO stacking weights (Yao et al., 2018).
+
+### LOO Stacking Weights
+
+The stacking weights $w_k$ for $K$ models are found by solving:
+
+```math
+\hat{w} = \arg\max_{w \in \mathcal{S}_K} \sum_{i=1}^{N} \log \sum_{k=1}^{K} w_k \cdot p_k^{(-i)}(x_i)
+```
+
+where:
+- $p_k^{(-i)}(x_i)$ is the leave-one-out predictive density of model $k$ at observation $i$
+- $\mathcal{S}_K = \{w : w_k \geq 0, \sum_k w_k = 1\}$ is the probability simplex
+
+A 5% weight floor is applied: $w_k \geq 0.05$ for all models, ensuring no model is entirely discarded.
+
+### Models Averaged
+
+Two models are combined:
+1. **Copula model**: single 3-D copula per component with BIC-selected family (models residual dependence)
+2. **3c-EM model**: Latent class with conditional independence assumption (computationally stable)
+
+### Final Posterior
+
+The BMA posterior probability for protein $i$ is:
+
+```math
+P_{\text{BMA}}(H_1 | \mathbf{x}_i) = \sum_{k=1}^{K} w_k \cdot P_k(H_1 | \mathbf{x}_i)
+```
+
+where $P_k(H_1 | \mathbf{x}_i)$ is the posterior from model $k$.
+
+## High-Level Summaries of Statistical Components
+
+The subsections below give a one-paragraph mathematical sketch and citation for each statistical component added since v1.0. Full derivations are intentionally kept brief — see the cited papers for proofs.
+
+### Student-t H0 (heavy-tailed null)
+
+The H0 enrichment marginal in the 3-component latent class model uses a Student-t distribution with location `mu_0`, scale `sigma_0`, and degrees of freedom `nu` selected by BIC over `{3, 5, 7, 10}`. The heavy tails absorb extreme negative log-BFs (e.g., `ell_e ≈ -45`) without requiring a separate outlier component. A BIC margin of 2 is required to prefer Student-t over Normal, preventing over-fitting on data sets where the null is genuinely Gaussian.
+
+Reference: Geweke, J. (1993). *Bayesian treatment of the independent Student-t linear model*. Journal of Applied Econometrics, 8, S19-S40.
+
+### Sigmoid-gated H1
+
+The H1 enrichment marginal uses a smooth sigmoid gate `w(x) = 1 / (1 + exp(-k * (x - JEFFREYS_SHIFT)))` with `JEFFREYS_SHIFT = ln(sqrt(10)) ≈ 1.151` (Jeffreys' "substantial evidence" threshold) and steepness `k = 5.0`. Below the threshold, log-density is smoothly suppressed rather than hard-zeroed; this preserves EM monotonicity (no log-likelihood decreases from the gate) and ensures component separation between the Agnostic and H1 components.
+
+Reference: Jeffreys, H. (1961). *Theory of Probability*, 3rd ed. Oxford University Press, Appendix B (Bayes factor scale).
+
+### BIC-Selected H1 Marginal
+
+The positive-support distribution `g` underlying the H1 enrichment density is selected at iteration 5 of the EM from `{Gamma, LogNormal, Weibull}` by minimizing BIC on the shifted enrichment values (`x - JEFFREYS_SHIFT`) for H1-assigned proteins. The selected family is then locked for the remainder of the EM, ensuring the same marginal is used throughout convergence and across all sensitivity-grid restarts.
+
+Reference: Schwarz, G. (1978). *Estimating the dimension of a model*. Annals of Statistics, 6(2), 461-464.
+
+### Storey Monotone Step-Down BFDR
+
+`bfdr()` (`src/core/utils.jl`) computes the Bayesian FDR from posterior probabilities and applies Storey's monotone step-down correction: when proteins are sorted by decreasing posterior probability, the BFDR sequence is enforced to be non-increasing via a backward cumulative-min pass. This eliminates the "wiggles" near the decision boundary that otherwise appear when consecutive proteins have similar PEP values.
+
+Reference: Storey, J. D. (2002). *A direct approach to false discovery rates*. Journal of the Royal Statistical Society B, 64(3), 479-498. See also Storey & Tibshirani (2003), PNAS, 100(16), 9440-9445.
+
+### Empirical Bayes Dirichlet (Minka fixed-point)
+
+When `lc_alpha_prior = :auto`, the Dirichlet concentration vector for the 3c-EM mixing weights is estimated from the data via Minka's fixed-point iteration. The update solves `psi(alpha_k) - psi(sum(alpha)) = mean_log_pi_k` for each component, where `psi` is the digamma function and `mean_log_pi_k` is the empirical mean of `log(pi_k)` across multi-restart EM solutions. Convergence is typically reached in fewer than 30 iterations and replaces the v1.0 fixed `[5, 2, 1]` Dirichlet.
+
+Reference: Minka, T. P. (2000). *Estimating a Dirichlet distribution*. Microsoft Research Technical Report.
+
+### BIC-Weighted Prior Grid Marginalization
+
+After EB Dirichlet estimation, a 9-point constant-strength simplex grid is constructed around the EB centre. The 3c-EM is fit at each grid point, and posterior probabilities are averaged across grid points using BIC weights `w_g ∝ exp(-BIC_g / 2)`. This eliminates residual single-prior sensitivity and produces posteriors that are robust to within-family Dirichlet specification while still being data-driven.
+
+Reference: Hoeting, J. A., Madigan, D., Raftery, A. E., & Volinsky, C. T. (1999). *Bayesian model averaging: A tutorial*. Statistical Science, 14(4), 382-401.
+
+### JZS Prior on the Regression Slope
+
+The JZS prior is a Cauchy prior on the regression slope, implemented as a Normal-Gamma scale mixture: `tau_g ~ Gamma(1/2, 2/r^2)` and `alpha ~ Normal(0, precision = tau_g)`. The marginal distribution of `alpha` is `Cauchy(0, r)`. Default `jzs_r_scale = 0.354` follows the JASP convention `sqrt(2)/4`. For multi-protocol data, the JZS prior sits on the hyper-mean slope `mu_alpha`; for single-protocol data, it sits on `alpha` directly. The Bayes factor uses an analytical Cauchy survival function for the prior probability under H1.
+
+Reference: Rouder, J. N., Speckman, P. L., Sun, D., Morey, R. D., & Iverson, G. (2009). *Bayesian t tests for accepting and rejecting the null hypothesis*. Psychonomic Bulletin & Review, 16(2), 225-237.
+
+### Platt Scaling Calibration
+
+Platt scaling is a 2-parameter logistic calibration: `P_calibrated = sigma(a * logit(P_raw) + b)`. Parameters `(a, b)` are fitted by minimising binary cross-entropy on simulation ground-truth labels. An ECE (Expected Calibration Error) safety guard rejects calibration when cross-validated ECE does not improve on the raw posteriors, falling back to the uncalibrated values. This prevents calibration from making things worse on data sets where the raw posteriors are already well-calibrated.
+
+Reference: Platt, J. (1999). *Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods*. Advances in Large Margin Classifiers, 10(3), 61-74.
+
+### LOO Stacking BMA
+
+Bayesian Model Averaging in BayesInteractomics uses LOO stacking weights computed by maximising the leave-one-out predictive log score across the simplex of weight vectors. A 5% weight floor (`w_k >= 0.05`) prevents winner-take-all degeneracy. Pareto-smoothed importance sampling (PSIS-LOO) provides per-protein Pareto-k diagnostics indicating which observations have unstable LOO estimates.
+
+Reference: Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). *Using stacking to average Bayesian predictive distributions*. Bayesian Analysis, 13(3), 917-1007. See also Vehtari, Gelman, & Gabry (2017), *Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC*, Statistics and Computing, 27(5), 1413-1432.
+
+### C2Qscore Docking
+
+C2Qscore is a 4-metric scoring function for AlphaFold 3 docking output, replacing the VoroIF dependency that proved difficult to install reliably across platforms. The four metrics combine ipTM, pDockQ-style features, and the AF3 confidence model. Logistic calibration on the CASP15/CAPRI baseline yields AUC-ROC = 0.929 vs pDockQ2's 0.825, with no clamping required.
+
+Reference: Olechnowicz, J., Aderinwale, T., Joshi, A., Christoffer, C., & Kihara, D. — CASP15/CAPRI baseline (Kihara Lab); see also Bryant, P. & Elofsson, A. (2022). *Improved prediction of protein-protein interactions using AlphaFold2*. Nature Communications, 13, 1265.
+
+### pDockQ — Burke et al. 2023
+
+pDockQ is a logistic calibration of AlphaFold ipTM/pTM and contact-area features that produces a probability-like score for the dockability of a candidate complex. BayesInteractomics uses pDockQ as a Tier 2 docking BF source (logistic calibration; Burke et al. 2023) when full-data JSONs are available; the Tier 1 ipTM step-function is used otherwise.
+
+Reference: Burke, D. F., Bryant, P., Barrio-Hernandez, I., et al. (2023). *Towards a structurally resolved human protein interaction network*. Nature Structural & Molecular Biology, 30, 216-225.
+
+## Discrete Empirical Detection Distribution
+
+### Motivation
+
+The Beta-Bernoulli Bayes factors for detection take on a **finite set of discrete values** determined by the number of possible detection patterns (combinations of sample and control counts). For example, with 3 samples and 3 controls, there are only $(3+1) \times (3+1) = 16$ possible detection count combinations, yielding at most 16 distinct BF values.
+
+### DiscreteEmpirical Distribution
+
+Instead of approximating these discrete BFs with a continuous Normal distribution (which was statistically incorrect), BayesInteractomics uses a `DiscreteEmpirical` distribution:
+
+```math
+f_d(x) = \sum_{k=1}^{K} p_k \cdot \delta(x - v_k)
+```
+
+where $v_1, \ldots, v_K$ are the unique log-BF values and $p_k$ are their empirical frequencies.
+
+### Jittering for Copula Fitting
+
+Copula fitting requires continuous uniform marginals. Discrete values are converted to pseudo-uniform observations via the randomized CDF (Denuit and Lambert, 2005):
+
+```math
+F^*(x) = F(x^-) + U \cdot P(X = x), \quad U \sim \text{Uniform}[0, 1]
+```
+
+where $F(x^-)$ is the left limit of the CDF. This preserves the rank structure while enabling copula estimation.
+
+## Platt Scaling
+
+### Calibration Problem
+
+Raw posterior probabilities from the EM may not be perfectly calibrated -- a protein assigned $P = 0.8$ may not have an 80% empirical chance of being a true interactor. **Platt scaling** provides post-hoc calibration.
+
+### Method
+
+A logistic regression is fitted on ground-truth labels from parametric simulation:
+
+```math
+P_{\text{calibrated}} = \sigma(a \cdot P_{\text{raw}} + b) = \frac{1}{1 + e^{-(a \cdot P_{\text{raw}} + b)}}
+```
+
+where $a$ and $b$ are fitted by maximum likelihood on simulation data with known true labels.
+
+### ECE Safety Guard
+
+Platt scaling is only applied if it improves the **Expected Calibration Error (ECE)**:
+
+```math
+\text{ECE} = \sum_{m=1}^{M} \frac{|B_m|}{N} \left| \text{acc}(B_m) - \text{conf}(B_m) \right|
+```
+
+where $B_m$ are calibration bins, $\text{acc}(B_m)$ is the empirical accuracy (fraction of true positives), and $\text{conf}(B_m)$ is the mean predicted probability. If $\text{ECE}_{\text{calibrated}} \geq \text{ECE}_{\text{raw}}$, the raw posteriors are retained.
+
+### Design Choice
+
+Platt scaling (2-parameter logistic) was chosen over isotonic regression (PAVA) because the latter can overfit when mid-range calibration data is sparse -- a common scenario in AP-MS where most proteins are clear non-interactors or strong interactors.
 
 ## Summary Statistics
 
@@ -632,117 +852,9 @@ For each protein, BayesInteractomics reports:
 - **Probability of direction (pd)**: $P(\log_2 FC > 0 | D)$
 - **ROPE percentage**: $P(|\log_2 FC| < \epsilon | D)$ where $\epsilon$ is a practical equivalence threshold
 
-### Probability of Direction (pd)
-
-The probability of direction (also called Maximum Probability of Effect) quantifies the certainty about the sign of an effect. For a posterior distribution of the parameter $\theta$:
-
-**From posterior draws** ($S$ samples):
-
-```math
-\text{pd} = \max\!\left(\frac{1}{S}\sum_{s=1}^{S} \mathbb{1}[\theta^{(s)} > 0],\;\; 1 - \frac{1}{S}\sum_{s=1}^{S} \mathbb{1}[\theta^{(s)} > 0]\right)
-```
-
-**From an analytical posterior** (e.g., Normal or mixture):
-
-```math
-\text{pd} = \max\!\left(\Phi(0),\; 1 - \Phi(0)\right)
-```
-
-where $\Phi(0)$ is the CDF evaluated at zero.
-
-The probability of direction is always in $[0.5, 1.0]$. A value of 0.5 indicates complete uncertainty about the direction, while 1.0 indicates certainty. The associated direction label is "+" if the effect is more likely positive, "$-$" if negative, or "~" if exactly 0.5.
-
-**Conversion to p-values** (for compatibility with frequentist frameworks):
-
-| Conversion | Formula |
-|------------|---------|
-| Two-sided p-value | $p = 2(1 - \text{pd})$ |
-| One-sided p-value | $p = 1 - \text{pd}$ |
-
-### Bayesian FDR q-values
-
-To control the false discovery rate in a Bayesian framework, BayesInteractomics computes q-values from the posterior probabilities. The local false discovery rate for protein $i$ is:
-
-```math
-\text{lfdr}_i = 1 - P(H_1 \mid D_i)
-```
-
-Proteins are sorted by descending posterior probability, and the q-value for the protein at rank $i$ is the cumulative average of local false discovery rates up to that rank:
-
-```math
-q_i = \frac{1}{i} \sum_{j=1}^{i} \text{lfdr}_{(j)}
-```
-
-where $(j)$ denotes the $j$-th protein in the sorted order. A protein with $q_i < \alpha$ means that among all proteins ranked at least as highly, the expected proportion of false discoveries is at most $\alpha$.
-
 ### Convergence Diagnostics
 - **ESS (Effective Sample Size)**: Measures quality of posterior samples (should be > 400)
 - **Rhat**: Gelman-Rubin convergence diagnostic (should be < 1.01)
-
-## Multiple Imputation
-
-Mass spectrometry data frequently contain missing values (missing not at random or missing at random). BayesInteractomics supports **multiple imputation** to propagate missing-data uncertainty into all downstream inferences.
-
-The procedure follows Rubin's (1987) combining rules:
-
-1. **Generate $M$ imputed datasets**: Each imputed dataset fills in missing values from a plausible imputation model.
-2. **Fit the full model on each imputed dataset**: The enrichment model (HBM) and regression model are run independently on each of the $M$ datasets, yielding $M$ posterior distributions per protein.
-3. **Pool posteriors as an equal-weight mixture**: For each protein parameter $\theta$, the pooled posterior is a mixture of the $M$ individual posteriors:
-
-```math
-q_{\text{pooled}}(\theta) = \frac{1}{M} \sum_{m=1}^{M} q_m(\theta)
-```
-
-where $q_m(\theta)$ is the posterior from the $m$-th imputed dataset.
-
-4. **Compute statistics on the mixture**: Bayes factors, log2FC summaries, credible intervals, and all other summary statistics are computed from the pooled mixture distribution. This naturally incorporates both within-imputation uncertainty (each $q_m$ has its own spread) and between-imputation uncertainty (the $q_m$ may have different locations).
-
-## Differential Analysis
-
-BayesInteractomics provides a framework for comparing interaction profiles between two experimental conditions (e.g., wild-type vs. mutant, treated vs. untreated). For each protein present in both conditions, the analysis quantifies whether the interaction evidence differs.
-
-### Differential Bayes Factor
-
-The differential Bayes factor measures relative evidence between condition A and condition B:
-
-```math
-\text{dBF}_i = \frac{BF_{i,A}}{BF_{i,B}}
-```
-
-computed in log-space as $\log_{10}(\text{dBF}_i) = \log_{10}(BF_{i,A}) - \log_{10}(BF_{i,B})$. A positive $\log_{10}(\text{dBF})$ indicates stronger interaction evidence in condition A. Both the combined Bayes factor and per-evidence Bayes factors (enrichment, correlation, detection) are compared, allowing diagnosis of which evidence arm drives the differential signal.
-
-### Effect Size and Differential Posterior
-
-The effect size is the difference in mean log2 fold changes:
-
-```math
-\Delta\text{log2FC}_i = \overline{\text{log2FC}}_{i,A} - \overline{\text{log2FC}}_{i,B}
-```
-
-The differential posterior probability quantifies evidence for *any* difference (direction-agnostic):
-
-```math
-P(\text{diff} \mid D_i) = \frac{|\text{dBF}_i|}{1 + |\text{dBF}_i|}
-```
-
-Multiple testing is controlled by computing Bayesian FDR q-values on the differential posteriors (see [Bayesian FDR q-values](@ref) above).
-
-### Interaction Classification
-
-Each protein is classified into one of five categories based on the differential evidence and configurable thresholds:
-
-| Class | Description |
-|-------|-------------|
-| `GAINED` | Interaction is stronger or exclusively present in condition A |
-| `REDUCED` | Interaction is stronger or exclusively present in condition B |
-| `UNCHANGED` | No significant differential evidence |
-| `BOTH_NEGATIVE` | Neither condition shows interaction, but differential q-value is significant |
-| `CONDITION_SPECIFIC` | Protein detected in only one condition (appended as `CONDITION_A_SPECIFIC` or `CONDITION_B_SPECIFIC`) |
-
-Three classification methods are available:
-- **Posterior**: uses per-condition posterior probability thresholds and $\Delta\text{log2FC}$
-- **dBF**: uses $|\log_{10}(\text{dBF})|$ exceeding a threshold
-- **Combined**: requires both posterior and dBF criteria to hold simultaneously
 
 ## Computational Implementation
 
@@ -780,32 +892,20 @@ RxInfer.jl uses **variational message passing** for fast Bayesian inference:
 ### Hierarchical Models
 - Gelman, A., & Hill, J. (2006). *Data Analysis Using Regression and Multilevel/Hierarchical Models*. Cambridge University Press.
 
-### Robust Regression
-- Lange, K. L., Little, R. J. A., & Taylor, J. M. G. (1989). Robust statistical modeling using the t distribution. *Journal of the American Statistical Association*, 84(408), 881-896.
-
-### Model Comparison
-- Watanabe, S. (2010). Asymptotic equivalence of Bayes cross validation and widely applicable information criterion in singular learning theory. *Journal of Machine Learning Research*, 11, 3571-3594.
-- Gelman, A., Hwang, J., & Vehtari, A. (2014). Understanding predictive information criteria for Bayesian models. *Statistics and Computing*, 24(6), 997-1016.
-- Vehtari, A., Gelman, A., & Gabry, J. (2017). Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC. *Statistics and Computing*, 27(5), 1413-1432.
-
 ### Copula Theory
 - Nelsen, R. B. (2006). *An Introduction to Copulas*, 2nd ed. Springer.
-- Joe, H. (2014). *Dependence Modeling with Copulas*. Chapman & Hall/CRC.
-
-### Mixture Models and BMA
-- McLachlan, G. J., & Peel, D. (2000). *Finite Mixture Models*. Wiley.
-- Hoeting, J. A., Madigan, D., Raftery, A. E., & Volinsky, C. T. (1999). Bayesian model averaging: a tutorial. *Statistical Science*, 14(4), 382-417.
-
-### Summary Statistics
-- Makowski, D., Ben-Shachar, M. S., Chen, S. H. A., & Lüdecke, D. (2019). Indices of effect existence and significance in the Bayesian framework. *Frontiers in Psychology*, 10, 2767.
-- Efron, B., Tibshirani, R., Storey, J. D., & Tusher, V. (2001). Empirical Bayes analysis of a microarray experiment. *Journal of the American Statistical Association*, 96(456), 1151-1160.
-
-### Multiple Imputation
-- Rubin, D. B. (1987). *Multiple Imputation for Nonresponse in Surveys*. Wiley.
+- Denuit, M., & Lambert, P. (2005). Constraints on concordance measures in bivariate discrete data. *Journal of Multivariate Analysis*, 93(1), 59-79.
 
 ### Variational Inference
 - Blei, D. M., et al. (2017). Variational inference: A review for statisticians. *Journal of the American Statistical Association*, 112(518), 859-877.
 - Bagaev, D., & de Vries, B. (2023). RxInfer: A Julia package for reactive message-passing-based Bayesian inference. *Journal of Open Source Software*, 8(84), 5161.
+
+### EM Acceleration
+- Varadhan, R., & Roland, C. (2008). Simple and globally convergent methods for accelerating the convergence of any EM algorithm. *Scandinavian Journal of Statistics*, 35(2), 335-353.
+
+### Model Averaging and Calibration
+- Yao, Y., Vehtari, A., Simpson, D., & Gelman, A. (2018). Using stacking to average Bayesian predictive distributions. *Bayesian Analysis*, 13(3), 917-1007.
+- Platt, J. (1999). Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. *Advances in Large Margin Classifiers*, 10(3), 61-74.
 
 ### Proteomics Applications
 - Choi, H., et al. (2011). SAINT: Probabilistic scoring of affinity purification-mass spectrometry data. *Nature Methods*, 8(1), 70-73.

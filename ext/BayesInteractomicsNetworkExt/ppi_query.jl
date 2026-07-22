@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-const STRING_API_BASE = "https://version-12-0.string-db.org/api"
+const STRING_API_BASE = "https://string-db.org/api"
 const STRING_RATE_LIMIT_MS = 1000
 const STRING_ID_CHUNK_SIZE = 500
 const STRING_NETWORK_CHUNK_SIZE = 2000
@@ -141,7 +141,10 @@ function _string_api_request(
 
     url = STRING_API_BASE * "/" * endpoint
     body_str = _form_encode(params)
-    headers = ["Content-Type" => "application/x-www-form-urlencoded"]
+    headers = [
+        "Content-Type" => "application/x-www-form-urlencoded",
+        "User-Agent" => "BayesInteractomics.jl (https://github.com)"
+    ]
 
     last_error = nothing
 

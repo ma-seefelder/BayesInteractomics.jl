@@ -38,8 +38,8 @@ function BayesInteractomics.export_graphml(net::InteractionNetwork, filename::St
         if hasproperty(net.node_attributes, :bayes_factor)
             write(io, "  <key id=\"bayes_factor\" for=\"node\" attr.name=\"bayes_factor\" attr.type=\"double\"/>\n")
         end
-        if hasproperty(net.node_attributes, :q_value)
-            write(io, "  <key id=\"q_value\" for=\"node\" attr.name=\"q_value\" attr.type=\"double\"/>\n")
+        if hasproperty(net.node_attributes, :BFDR) || hasproperty(net.node_attributes, :q_value)
+            write(io, "  <key id=\"BFDR\" for=\"node\" attr.name=\"BFDR\" attr.type=\"double\"/>\n")
         end
         if hasproperty(net.node_attributes, :mean_log2fc)
             write(io, "  <key id=\"log2fc\" for=\"node\" attr.name=\"log2fc\" attr.type=\"double\"/>\n")
@@ -79,10 +79,13 @@ function BayesInteractomics.export_graphml(net::InteractionNetwork, filename::St
                 end
             end
 
-            if hasproperty(net.node_attributes, :q_value)
-                val = net.node_attributes.q_value[i]
+            # BFDR (with legacy q_value fallback)
+            bfdr_col = hasproperty(net.node_attributes, :BFDR) ? :BFDR :
+                       hasproperty(net.node_attributes, :q_value) ? :q_value : nothing
+            if bfdr_col !== nothing
+                val = net.node_attributes[i, bfdr_col]
                 if !ismissing(val)
-                    write(io, "      <data key=\"q_value\">$val</data>\n")
+                    write(io, "      <data key=\"BFDR\">$val</data>\n")
                 end
             end
 

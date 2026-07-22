@@ -1,0 +1,4 @@
+original_name,canonical_name,canonical_id,action,reason,user_approved,group_id,is_lead
+P1,PRM1,9606.ENSP00000310515,CURATE_RENAME,Renamed from 'P1' to STRING preferred name 'PRM1',false,,true
+P2,PMP2,9606.ENSP00000256103,CURATE_RENAME,Renamed from 'P2' to STRING preferred name 'PMP2',false,,true
+P3,SLC10A3,9606.ENSP00000263512,CURATE_RENAME,Renamed from 'P3' to STRING preferred name 'SLC10A3',false,,true

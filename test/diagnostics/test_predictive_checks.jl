@@ -13,7 +13,7 @@ Tests for the posterior predictive checks and model diagnostics framework.
 
     cfg = DiagnosticsConfig()
     @test cfg.n_ppc_draws == 1000
-    @test cfg.n_proteins_to_check == 50
+    @test cfg.n_proteins_to_check == 0
     @test cfg.ppc_protein_selection == :top_and_random
     @test cfg.residual_model == :both
     @test cfg.calibration_bins == 10
@@ -346,7 +346,8 @@ end
         Dict(1 => sample_proto), Dict(1 => control_proto),
         1, no_experiments,
         no_parameters_HBM, no_parameters_Regression,
-        protocol_positions, experiment_positions, matched_positions
+        protocol_positions, experiment_positions, matched_positions,
+        trues(length(protein_ids))
     )
 
     all_ids = getIDs(data)
@@ -398,9 +399,10 @@ end
     @test flag_map["P4"].is_low_data == true
     @test flag_map["P4"].overall_flag == :fail
 
-    # P5: 3 obs, no residuals → low_data warning
+    # P5: 3 obs, not in PPC subset → raw z-score fallback (residuals.jl:456-469) kicks in
+    # for n_obs >= 2, so mean_residual is the mean of z-scores (== 0.0), NOT NaN.
     @test flag_map["P5"].n_observations == 3
-    @test isnan(flag_map["P5"].mean_residual)
+    @test flag_map["P5"].mean_residual ≈ 0.0 atol=1e-10
     @test flag_map["P5"].overall_flag == :warning
 
     # P6: 5 non-missing obs (3 from exp1 + 2 from exp2) → not low_data
@@ -413,7 +415,9 @@ end
         data, all_ids, name_to_idx
     )
     @test length(flags_no_ppc) == length(all_ids)
-    @test all(f -> isnan(f.mean_residual), flags_no_ppc)
+    # Without PPC residuals the raw z-score fallback applies: proteins with n_obs >= 2 get a
+    # finite mean_residual (mean of z-scores), proteins with n_obs < 2 remain NaN.
+    @test all(f -> f.n_observations >= 2 ? !isnan(f.mean_residual) : isnan(f.mean_residual), flags_no_ppc)
     @test all(f -> f.is_residual_outlier == false, flags_no_ppc)
 end
 
@@ -568,9 +572,11 @@ end
     @test "sensitivity_min_posterior" in names(merged)
     @test "sensitivity_max_posterior" in names(merged)
 
-    # Check stability columns
+    # Check stability columns. The former `frac_q_lt_0_05` fraction was dropped when
+    # q_value was renamed to BFDR; classification_stability now exposes only the
+    # posterior-fraction columns frac_P_gt_0_5 / 0_8 / 0_95 (sensitivity.jl:575).
     @test "frac_P_gt_0_8" in names(merged)
-    @test "frac_q_lt_0_05" in names(merged)
+    @test "frac_P_gt_0_95" in names(merged)
 
     # Check values
     p1_row = filter(row -> row.Protein == "P1", merged)
@@ -583,6 +589,108 @@ end
 
     # Original df should not be modified
     @test !("sensitivity_range" in names(results_df))
+end
+
+@testitem "classification_stability column" begin
+    using BayesInteractomics
+    using DataFrames
+    using Dates
+    using Statistics
+
+    # Build a mock results DataFrame with 5 proteins
+    results_df = DataFrame(
+        Protein = ["P1", "P2", "P3", "P4", "P5"],
+        BF = [100.0, 50.0, 10.0, 1.0, 5.0],
+        posterior_prob = [0.95, 0.05, 0.60, 0.40, 0.70],
+        q = [0.01, 0.50, 0.10, 0.30, 0.15],
+        mean_log2FC = [3.0, -0.5, 1.0, 0.5, 1.5]
+    )
+
+    # Build mock SensitivityResult with only P1-P4 (P5 missing)
+    n_proteins = 4
+    n_settings = 5
+    # P1: always above 0.5 (frac_P_gt_0_5=1.0, no crossing)
+    # P2: always below 0.5 (frac_P_gt_0_5=0.0, no crossing)
+    # P3: mostly above 0.5 but doesn't cross (frac_P_gt_0_5=0.6, no crossing)
+    # P4: crosses the 0.5 boundary (frac_P_gt_0_5=0.4, crossing=true)
+    posterior_matrix = [0.9 0.92 0.95 0.88 0.91;   # P1: all > 0.5
+                        0.1 0.08 0.12 0.15 0.05;   # P2: all < 0.5
+                        0.6 0.7 0.55 0.65 0.58;    # P3: all > 0.5 (frac=0.6 will be set manually)
+                        0.4 0.3 0.6 0.55 0.35]     # P4: crosses 0.5
+    bf_matrix = ones(n_proteins, n_settings)
+    q_matrix = [0.01 0.02 0.005 0.015 0.01;
+                0.50 0.55 0.45 0.48 0.52;
+                0.10 0.12 0.08 0.11 0.09;
+                0.30 0.35 0.10 0.12 0.40]
+
+    summary_df = DataFrame(
+        Protein = ["P1", "P2", "P3", "P4"],
+        baseline_posterior = posterior_matrix[:, 1],
+        mean_posterior = vec(Statistics.mean(posterior_matrix, dims=2)),
+        std_posterior = vec(Statistics.std(posterior_matrix, dims=2)),
+        min_posterior = vec(minimum(posterior_matrix, dims=2)),
+        max_posterior = vec(maximum(posterior_matrix, dims=2)),
+        range = vec(maximum(posterior_matrix, dims=2) .- minimum(posterior_matrix, dims=2))
+    )
+
+    # Build stab_df with threshold_crossing_0_5 column
+    stab_df = DataFrame(
+        Protein = ["P1", "P2", "P3", "P4"],
+        frac_P_gt_0_5 = [1.0, 0.0, 0.6, 0.4],
+        frac_P_gt_0_8 = [1.0, 0.0, 0.0, 0.0],
+        frac_P_gt_0_95 = [0.2, 0.0, 0.0, 0.0],
+        frac_q_lt_0_05 = [1.0, 0.0, 0.0, 0.0],
+        frac_q_lt_0_01 = [0.6, 0.0, 0.0, 0.0],
+        threshold_crossing_0_5 = [false, false, false, true],
+        threshold_crossing_0_95 = [false, false, false, false]
+    )
+
+    sr = SensitivityResult(
+        SensitivityConfig(),
+        PriorSetting[],
+        posterior_matrix, bf_matrix, q_matrix,
+        ["P1", "P2", "P3", "P4"],
+        1,
+        summary_df, stab_df,
+        now()
+    )
+
+    # Merge with sensitivity only (no diagnostics)
+    merged = BayesInteractomics._merge_diagnostics_to_results(
+        results_df, nothing; sensitivity = sr
+    )
+
+    # Test 1: classification_stability column exists
+    @test "classification_stability" in names(merged)
+
+    # Test 7: column type is Union{Missing, String}
+    @test eltype(merged.classification_stability) == Union{Missing, String}
+
+    # Test 2: P1 (frac=1.0, no crossing) = robust
+    p1 = filter(row -> row.Protein == "P1", merged)
+    @test p1.classification_stability[1] == "robust"
+
+    # Test 3: P2 (frac=0.0, no crossing) = robust
+    p2 = filter(row -> row.Protein == "P2", merged)
+    @test p2.classification_stability[1] == "robust"
+
+    # Test 4: P3 (frac=0.6, no crossing) = sensitive
+    p3 = filter(row -> row.Protein == "P3", merged)
+    @test p3.classification_stability[1] == "sensitive"
+
+    # Test 1 (behavior): P4 (crossing=true) = fragile
+    p4 = filter(row -> row.Protein == "P4", merged)
+    @test p4.classification_stability[1] == "fragile"
+
+    # Test 6: P5 (not in sensitivity results) = missing
+    p5 = filter(row -> row.Protein == "P5", merged)
+    @test ismissing(p5.classification_stability[1])
+
+    # Test 5: When sensitivity is nothing, classification_stability column absent
+    merged_no_sens = BayesInteractomics._merge_diagnostics_to_results(
+        results_df, nothing
+    )
+    @test !("classification_stability" in names(merged_no_sens))
 end
 
 @testitem "_ks_test_uniform" begin

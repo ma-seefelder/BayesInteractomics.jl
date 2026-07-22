@@ -107,20 +107,23 @@ end
     data = DataStructureFixtures.create_mock_interaction_data(n_proteins, 1; n_experiments_per_protocol=2)
 
     # ── Fixed loop (uses original data) ──────────────────────────────────
-    fixed = permuteLabels(data, 1)
+    # A Ref holds the accumulator: on Julia 1.12 a `for`-loop body is soft scope, so
+    # reassigning a testitem-module global (`fixed = ...`) inside the loop is treated as a
+    # new, uninitialised local → UndefVarError. Mutating a Ref sidesteps the soft-scope rule.
+    fixed = Ref(permuteLabels(data, 1))
     for _ in 2:n_datasets
-        fixed = BayesInteractomics.vcat(fixed, permuteLabels(data))
+        fixed[] = BayesInteractomics.vcat(fixed[], permuteLabels(data))
     end
-    @test length(getIDs(fixed)) == n_datasets * n_proteins
+    @test length(getIDs(fixed[])) == n_datasets * n_proteins
 
     # ── Buggy loop (would use growing permuted_data) ─────────────────────
     # Demonstrates what the bug produced: 2^(n_datasets-1) × n_proteins
-    buggy = permuteLabels(data, 1)
+    buggy = Ref(permuteLabels(data, 1))
     for _ in 2:n_datasets
-        buggy = BayesInteractomics.vcat(buggy, permuteLabels(buggy))
+        buggy[] = BayesInteractomics.vcat(buggy[], permuteLabels(buggy[]))
     end
-    @test length(getIDs(buggy)) == 2^(n_datasets - 1) * n_proteins
-    @test length(getIDs(fixed)) < length(getIDs(buggy))  # fixed is smaller (correct)
+    @test length(getIDs(buggy[])) == 2^(n_datasets - 1) * n_proteins
+    @test length(getIDs(fixed[])) < length(getIDs(buggy[]))  # fixed is smaller (correct)
 end
 
 # ---------------------------------------------------------------------------
@@ -135,31 +138,25 @@ end
     # n_controls = 1 protocol × 2 experiments × 3 replicates = 6; n_samples = same
     n_proteins = 5
     data       = DataStructureFixtures.create_mock_interaction_data(n_proteins, 1; n_experiments_per_protocol=2)
-    savefile   = tempname() * ".xlsx"
 
-    try
-        # computeH0_BayesFactors returns the H0 DataFrame directly
-        H0 = BayesInteractomics.computeH0_BayesFactors(
-            data;
-            savefile   = savefile,
-            n_controls = 6,
-            n_samples  = 6,
-            refID      = 1,
-            n          = n_proteins
-        )
+    # computeH0_BayesFactors returns the H0 DataFrame directly. The legacy XLSX `savefile`
+    # kwarg was removed when the H0 cache migrated to JLD2 (`h0_cache_file`); the smoke test
+    # exercises the in-memory return path (no file output).
+    H0 = BayesInteractomics.computeH0_BayesFactors(
+        data;
+        n_controls = 6,
+        n_samples  = 6,
+        refID      = 1,
+        n          = n_proteins
+    )
 
-        @test isfile(savefile)
-        @test H0 isa DataFrame
-        @test nrow(H0) > 0
-        @test hasproperty(H0, :bf_enrichment)
-        @test hasproperty(H0, :bf_correlation)
-        @test hasproperty(H0, :bf_detected)
+    @test H0 isa DataFrame
+    @test nrow(H0) > 0
+    @test hasproperty(H0, :bf_enrichment)
+    @test hasproperty(H0, :bf_correlation)
+    @test hasproperty(H0, :bf_detected)
 
-        # BFs from permuted (null) data must not all be zero or infinite
-        valid_bf = filter(x -> isfinite(x) && x > 0, H0.bf_correlation)
-        @test length(valid_bf) > 0
-
-    finally
-        isfile(savefile) && rm(savefile)
-    end
+    # BFs from permuted (null) data must not all be zero or infinite
+    valid_bf = filter(x -> isfinite(x) && x > 0, H0.bf_correlation)
+    @test length(valid_bf) > 0
 end

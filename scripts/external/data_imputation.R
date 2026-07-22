@@ -21,13 +21,15 @@ imp <- complete(imputed, action = "a")
 
 for (i in 1:5) {
   tmp <- cbind(data, imp[[i]])
-  write.csv(tmp, paste0("dataset_imp_", i, ".csv"))
+  # Renamed from dataset_imp_<i>.csv to dataset_imp_mice_<i>.csv to disambiguate from dataset_mnar.xlsx
+  # `load_data(...; imputation = :mar)` accepts both old and new filenames in v1.2; old name removed in v1.3
+  write.csv(tmp, paste0("dataset_imp_mice_", i, ".csv"))
 }
 
 
 
 #import CSV, DataFrames, XLSX
 #for i in 1:5
-#  x = CSV.read("imputed_data/dataset_imp_$i.csv", DataFrames.DataFrame)[:, 2:end]
-#  XLSX.writetable("imputed_data/dataset_imp_$i.xlsx", x)
+#  x = CSV.read("imputed_data/dataset_imp_mice_$i.csv", DataFrames.DataFrame)[:, 2:end]
+#  XLSX.writetable("imputed_data/dataset_imp_mice_$i.xlsx", x)
 #end

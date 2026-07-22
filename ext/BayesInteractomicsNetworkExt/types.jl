@@ -138,7 +138,7 @@ function Base.show(io::IO, net::InteractionNetwork)
     println(io, "  Nodes: $n_nodes proteins")
     println(io, "  Edges: $n_edges interactions")
     println(io, "  Bait: $bait_info")
-    print(io, "  Thresholds: posterior=$(net.threshold_used.posterior_threshold), q=$(net.threshold_used.q_threshold)")
+    print(io, "  Thresholds: posterior=$(net.threshold_used.posterior_threshold), BFDR=$(net.threshold_used.bfdr_threshold)")
 end
 
 function Base.show(io::IO, stats::NetworkStatistics)

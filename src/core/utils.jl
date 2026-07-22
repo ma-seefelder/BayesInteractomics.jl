@@ -87,28 +87,24 @@ cdf_log2FC(log2FC; threshold::Float64 = 0.0) = cdf(log2FC, threshold)
 append_unique!(v1::Vector{T}, v2::Vector{T}) where T = append!(v1, filter(x -> !(x ∈ v1), v2))
 
 
-function check_file(file::String) 
+function check_file(file::String)
     !isfile(file) && throw(ArgumentError("File $file does not exist"))
     return nothing
 end
 
 
-"""
-    q(BF)
-
-    Computes the q-value for a vector of Bayes factors using the method described in:
-    - Storey & Tibshirani (2003): Statistical significance for genomewide studies, Proceedings of the National Academy of Sciences, 100(16):9440–9445, 2003
-    - John D. Storey, “The positive false discovery rate: A Bayesian interpretation and the q‑value,” The Annals of Statistics, 31(6):2013–2035, 2003.
-    - Storey J.D., “QVALUE: The Manual Version 1.0,” 2003. https://genomics.princeton.edu/storeylab/qvalue/manual.pdf
-"""
 
 """
-    q(values; isBF::Bool = true)
+    bfdr(values; isBF::Bool = true)
 
-Computes q-values from a vector of Bayes Factors or posterior probabilities,
-correctly and robustly handling missing values.
+Computes Bayesian FDR (BFDR) values from a vector of Bayes Factors or posterior
+probabilities, correctly and robustly handling missing values.
+
+Uses the method described in:
+- Storey & Tibshirani (2003): Statistical significance for genomewide studies, PNAS, 100(16):9440-9445
+- John D. Storey, "The positive false discovery rate: A Bayesian interpretation and the q-value," Ann. Stat., 31(6):2013-2035, 2003.
 """
-function q(x; isBF::Bool = true)
+function bfdr(x; isBF::Bool = true)
     # 1. Convert BFs to posterior probabilities if necessary
     posterior_prob = isBF ? (@. x / (1 + x)) : x
     # 2. Separate the valid (non-missing) probabilities for calculation
@@ -120,7 +116,7 @@ function q(x; isBF::Bool = true)
         return posterior_prob # Return the original vector (all missings)
     end
 
-    # 3. Perform the entire q-value calculation on the clean `valid_probs` vector
+    # 3. Perform the entire BFDR calculation on the clean `valid_probs` vector
     sorted_idx_valid = sortperm(valid_probs, rev=true)
     probs_sorted = valid_probs[sorted_idx_valid]
 
@@ -130,20 +126,40 @@ function q(x; isBF::Bool = true)
     cumulative_expected_false_positives = fill(NaN, length(local_fdr_sorted))
     cumulative_expected_false_positives[isfinite_local_fdr_sorted] .= cumsum(local_fdr_sorted[isfinite_local_fdr_sorted])
     
-    bfdr = cumulative_expected_false_positives ./ (1:length(cumulative_expected_false_positives))
+    bfdr_vals = cumulative_expected_false_positives ./ (1:length(cumulative_expected_false_positives))
 
-    # Un-sort the calculated q-values to match the order of `valid_probs`
-    qvals_calculated = bfdr[invperm(sorted_idx_valid)]
+    # Storey monotone step-down correction: enforce non-increasing BFDR values
+    # when sorted by decreasing posterior probability
+    bfdr_vals = reverse(accumulate(min, reverse(bfdr_vals)))
+    # Defensive clamp against floating-point drift
+    bfdr_vals = clamp.(bfdr_vals, 0.0, 1.0)
+
+    # Un-sort the calculated BFDR values to match the order of `valid_probs`
+    bfdr_calculated = bfdr_vals[invperm(sorted_idx_valid)]
 
     # 4. Create a full-length result vector and place the results back
-    final_q_values = Vector{Union{Missing, Float64}}(missing, length(posterior_prob))
-    final_q_values[valid_indices] = qvals_calculated
+    final_bfdr_values = Vector{Union{Missing, Float64}}(missing, length(posterior_prob))
+    final_bfdr_values[valid_indices] = bfdr_calculated
 
-    # 5. Set q-value to 1.0 for all proteins with a posterior probability of 0.0
+    # 5. Set BFDR to 1.0 for all proteins with a posterior probability of 0.0
     posterior_prob_is_zero = findall(x -> x == 0.0, posterior_prob[valid_indices])
-    final_q_values[valid_indices[posterior_prob_is_zero]] .= 1.0
+    final_bfdr_values[valid_indices[posterior_prob_is_zero]] .= 1.0
     
-    return final_q_values
+    return final_bfdr_values
 end
 
+"""
+    pep(x)
 
+Compute Posterior Error Probability (PEP = 1 - posterior probability).
+Handles missing values.
+"""
+function pep(x)
+    return @. ifelse(ismissing(x), missing, 1.0 - x)
+end
+
+"""Deprecated: use `bfdr()` instead."""
+function q(x; kwargs...)
+    @warn "`q()` is deprecated, use `bfdr()` instead" maxlog=1
+    return bfdr(x; kwargs...)
+end

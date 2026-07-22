@@ -1,6 +1,10 @@
 
 test/dummy_data/dummy_data.xlsx
 test/dummy_data/dummy_data.csv
+test/differential/*.png
+test/differential/*.svg
+test/reports/*.png
+test/reports/*.svg
 /data
 src/analysis_deltaHAP40.jl
 src/analysis_HAP40-4K.jl
@@ -17,7 +21,12 @@ training_metrics_Adam_1e-3.csv
 /wandb
 trained_dnn_model.bson
 training_metrics.csv
-**/.CondaPkg/
+/.CondaPkg
+/.CondaPkg
+/.CondaPkg
+.CondaPkg/meta
+/src/dnn/.CondaPkg
+.CondaPkg/pixi.toml
 /encodings/topological_negatives_raw_data
 /encodings/datasets_without_topological
 encodings/topological_negatives.csv
@@ -38,5 +47,25 @@ log.txt
 /docs/build
 /julia_con
 examples/.CondaPkg/
+scripts/dnn_training/.CondaPkg/
 profiling
 examples/meta
+/.bayesinteractomics_cache/alphafold_db
+/.bayesinteractomics_cache/docking
+.bayesinteractomics_cache/uniprot_mapping/mapping.jld2
+/test/docking/.bayesinteractomics_cache
+/c2qscore
+/imputed_data/
+
+# Scratch debug scripts and graphify CLI raw output.
+inspect_qc.jl
+/graphify-out/
+examples/graphify-out/
+test/graphify-out/
+/.playwright-mcp
+
+# Large model artefacts — shipped as the `bayesinteractomics_models` Pkg artifact
+# (Artifacts.toml), lazily downloaded on install; kept out of the git repo.
+/metalearners/*.jld2
+/metalearners/_human_only/
+/model-*.jld2

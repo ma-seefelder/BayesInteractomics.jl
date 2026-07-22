@@ -1,0 +1,29 @@
+name: CompatHelper
+on:
+  schedule:
+    - cron: '0 0 * * *'   # daily; opens PRs to bump [compat] when deps release
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  CompatHelper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Julia is already available in the PATH
+        id: julia_in_path
+        run: which julia
+        continue-on-error: true
+      - name: Install Julia, but only if it is not already available
+        if: steps.julia_in_path.outcome != 'success'
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - name: Use the Julia in the PATH
+        run: |
+          julia --color=yes -e 'import Pkg; Pkg.add("CompatHelper")'
+      - name: CompatHelper.main()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          julia --color=yes -e 'using CompatHelper; CompatHelper.main()'

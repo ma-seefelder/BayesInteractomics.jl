@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+metalearners/metalearner_tr_ddi.jld2 filter=lfs diff=lfs merge=lfs -text
+metalearners/metalearner_tr_ddi_mc.jld2 filter=lfs diff=lfs merge=lfs -text

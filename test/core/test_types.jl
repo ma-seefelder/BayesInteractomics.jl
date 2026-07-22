@@ -59,7 +59,8 @@ end
         Dict(1 => p2, 2 => p1),
         2, Dict(1 => 1, 2 => 1),
         4, 3,
-        [2, 4], [3, 5], [1, 2]
+        [2, 4], [3, 5], [1, 2],
+        trues(1)
     )
 
     @test getNoProtocols(data) == 2
@@ -80,7 +81,8 @@ end
         Dict(1 => p),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     @test_throws ArgumentError getControls(data, 2)
@@ -204,7 +206,8 @@ end
         Dict(1 => p, 2 => p),
         2, Dict(1 => 1, 2 => 1),
         5, 3,
-        [2, 4], [3, 5], [1, 2]
+        [2, 4], [3, 5], [1, 2],
+        trues(1)
     )
 
     protocol_pos = getProtocolPositions(data)

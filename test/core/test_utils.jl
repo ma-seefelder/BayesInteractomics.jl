@@ -34,68 +34,101 @@ end
     @test var(result) ≈ 2.0 atol=0.01
 end
 
-@testitem "q-value calculation with Bayes factors" begin
+@testitem "BFDR calculation with Bayes factors" begin
     using BayesInteractomics
-    using BayesInteractomics: q
+    using BayesInteractomics: bfdr
 
-    # BF vector: higher values should have lower q-values
+    # BF vector: higher values should have lower BFDR values
     bf = [10.0, 5.0, 2.0, 0.5, 0.1]
-    q_vals = q(bf, isBF=true)
+    bfdr_vals = bfdr(bf, isBF=true)
 
-    @test !any(ismissing.(q_vals))
-    @test all(x -> 0.0 <= x <= 1.0, q_vals)
-    # Q-values should be sorted (high BF -> low q, low BF -> high q)
-    @test q_vals[1] <= q_vals[5]
+    @test !any(ismissing.(bfdr_vals))
+    @test all(x -> 0.0 <= x <= 1.0, bfdr_vals)
+    # BFDR values should be sorted (high BF -> low BFDR, low BF -> high BFDR)
+    @test bfdr_vals[1] <= bfdr_vals[5]
 end
 
-@testitem "q-value calculation with posterior probabilities" begin
+@testitem "BFDR calculation with posterior probabilities" begin
     using BayesInteractomics
-    using BayesInteractomics: q
+    using BayesInteractomics: bfdr
 
     # Posterior probabilities directly
     pp = [0.8, 0.5, 0.3, 0.1, 0.05]
-    q_vals = q(pp, isBF=false)
+    bfdr_vals = bfdr(pp, isBF=false)
 
-    @test !any(ismissing.(q_vals))
-    @test all(x -> 0.0 <= x <= 1.0, q_vals)
+    @test !any(ismissing.(bfdr_vals))
+    @test all(x -> 0.0 <= x <= 1.0, bfdr_vals)
 end
 
-@testitem "q-value with missing values" begin
+@testitem "BFDR with missing values" begin
     using BayesInteractomics
-    using BayesInteractomics: q
+    using BayesInteractomics: bfdr
 
     # Vector with missing values
     bf = [10.0, missing, 5.0, missing, 2.0]
-    q_vals = q(bf, isBF=true)
+    bfdr_vals = bfdr(bf, isBF=true)
 
-    @test ismissing(q_vals[2])
-    @test ismissing(q_vals[4])
-    @test !ismissing(q_vals[1])
-    @test !ismissing(q_vals[3])
-    @test !ismissing(q_vals[5])
+    @test ismissing(bfdr_vals[2])
+    @test ismissing(bfdr_vals[4])
+    @test !ismissing(bfdr_vals[1])
+    @test !ismissing(bfdr_vals[3])
+    @test !ismissing(bfdr_vals[5])
 end
 
-@testitem "q-value with zero posterior probabilities" begin
+@testitem "BFDR with zero posterior probabilities" begin
     using BayesInteractomics
-    using BayesInteractomics: q
+    using BayesInteractomics: bfdr
 
     # BF = 0 converts to posterior probability = 0
     bf = [10.0, 0.0, 5.0]
-    q_vals = q(bf, isBF=true)
+    bfdr_vals = bfdr(bf, isBF=true)
 
-    @test !any(ismissing.(q_vals))
-    # BF=0 should have q-value = 1.0
-    @test q_vals[2] == 1.0
+    @test !any(ismissing.(bfdr_vals))
+    # BF=0 should have BFDR = 1.0
+    @test bfdr_vals[2] == 1.0
 end
 
-@testitem "q-value with all missing values" begin
+@testitem "BFDR with all missing values" begin
     using BayesInteractomics
-    using BayesInteractomics: q
+    using BayesInteractomics: bfdr
 
     bf = [missing, missing, missing]
+    bfdr_vals = bfdr(bf, isBF=true)
+
+    @test all(ismissing.(bfdr_vals))
+end
+
+@testitem "pep computation" begin
+    using BayesInteractomics
+    using BayesInteractomics: pep
+
+    pp = [0.95, 0.8, 0.5, 0.1, 0.0]
+    pep_vals = pep(pp)
+
+    @test pep_vals[1] ≈ 0.05
+    @test pep_vals[2] ≈ 0.20
+    @test pep_vals[3] ≈ 0.50
+    @test pep_vals[4] ≈ 0.90
+    @test pep_vals[5] ≈ 1.0
+
+    # Missing handling
+    pp_missing = [0.9, missing, 0.5]
+    pep_missing = pep(pp_missing)
+    @test pep_missing[1] ≈ 0.1
+    @test ismissing(pep_missing[2])
+    @test pep_missing[3] ≈ 0.5
+end
+
+@testitem "deprecated q() alias warns" begin
+    using BayesInteractomics
+    using BayesInteractomics: q, bfdr
+
+    bf = [10.0, 5.0, 2.0]
+    # q() should produce same result as bfdr() but emit deprecation warning
+    bfdr_vals = bfdr(bf, isBF=true)
     q_vals = q(bf, isBF=true)
 
-    @test all(ismissing.(q_vals))
+    @test q_vals == bfdr_vals
 end
 
 @testitem "cdf_log2FC computation" begin
@@ -175,4 +208,66 @@ end
     @test isa(converted, Normal)
     @test mean(converted) == 5.0
     @test std(converted) == 2.0
+end
+
+@testitem "BFDR monotonicity with posterior probabilities" begin
+    using BayesInteractomics
+    using BayesInteractomics: bfdr
+
+    pp = [0.95, 0.8, 0.5, 0.3, 0.1, 0.05]
+    bfdr_vals = bfdr(pp, isBF=false)
+
+    # All BFDR values must be in [0,1]
+    @test all(x -> 0.0 <= x <= 1.0, skipmissing(bfdr_vals))
+
+    # When sorted by decreasing posterior, BFDR values must be non-increasing
+    sorted_order = sortperm(pp, rev=true)
+    bfdr_sorted = bfdr_vals[sorted_order]
+    for i in 1:(length(bfdr_sorted)-1)
+        @test bfdr_sorted[i] <= bfdr_sorted[i+1]
+    end
+end
+
+@testitem "BFDR monotonicity property-based" begin
+    using BayesInteractomics
+    using BayesInteractomics: bfdr
+    using Random
+
+    rng = MersenneTwister(42)
+    for _ in 1:100
+        n = rand(rng, 5:50)
+        pp = rand(rng, n)
+        bfdr_vals = bfdr(pp, isBF=false)
+
+        # All valid BFDR values in [0,1]
+        valid = collect(skipmissing(bfdr_vals))
+        @test all(x -> 0.0 <= x <= 1.0, valid)
+
+        # When sorted by decreasing posterior, BFDR values must be non-increasing
+        sorted_order = sortperm(pp, rev=true)
+        bfdr_sorted = bfdr_vals[sorted_order]
+        for i in 1:(length(bfdr_sorted)-1)
+            @test bfdr_sorted[i] <= bfdr_sorted[i+1]
+        end
+    end
+end
+
+@testitem "BFDR EM posteriors differ from flat-prior BF/(1+BF)" begin
+    using BayesInteractomics
+    using BayesInteractomics: bfdr
+
+    # Simulate the real pipeline scenario: EM posteriors differ from BF/(1+BF)
+    # because EM uses mixture model weights, not flat 0.5 prior.
+    combined_bf = [100.0, 20.0, 5.0, 1.0, 0.2]
+    em_posteriors = [0.99, 0.92, 0.70, 0.25, 0.03]
+
+    bfdr_from_em = bfdr(em_posteriors, isBF=false)
+    bfdr_from_bf = bfdr(combined_bf, isBF=true)
+
+    # BFDR values must differ because EM posteriors != BF/(1+BF) flat-prior posteriors
+    @test any(i -> !isapprox(bfdr_from_em[i], bfdr_from_bf[i]; atol=1e-10), eachindex(bfdr_from_em))
+
+    # Both should still be valid BFDR values
+    @test all(x -> 0.0 <= x <= 1.0, skipmissing(bfdr_from_em))
+    @test all(x -> 0.0 <= x <= 1.0, skipmissing(bfdr_from_bf))
 end

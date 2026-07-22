@@ -129,20 +129,6 @@ function plot_inference_results(result::BayesResult; file::Union{String, Nothing
     return plot_inference_results(result.hbm_result; file = file)
 end
 
-function get_axis_limits(log2fc, observed_log2fc)
-    # check for null inputs
-    isnothing(log2fc) && throw(ArgumentError("Input cannot be nothing"))
-    # concatenate everything
-    x = [0.0]
-    [append!(x, log2fc[pos]) for pos in eachindex(log2fc)]
-    append!(x, skipmissing(observed_log2fc))
-
-    min::Float64 = quantile(x, 0.001)
-    max::Float64 = quantile(x, 0.999)
-    
-    return (min, max, nothing, nothing)
-end
-
 ############################################################################
 # Plot log2FC
 ############################################################################

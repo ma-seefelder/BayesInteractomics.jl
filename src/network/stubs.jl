@@ -21,7 +21,7 @@ df = DataFrame(
     Protein = ["A", "B", "C"],
     PosteriorProbability = [0.95, 0.85, 0.75],
     BayesFactor = [100.0, 50.0, 20.0],
-    q_value = [0.001, 0.01, 0.02]
+    BFDR = [0.001, 0.01, 0.02]
 )
 
 ar = NetworkAnalysisResult(df, bait_protein="MYC", bait_index=1)
@@ -69,12 +69,22 @@ function getPosteriorProbs(ar::NetworkAnalysisResult)
 end
 
 """
-    getQValues(ar::NetworkAnalysisResult) -> Vector{Float64}
+    getBFDR(ar::NetworkAnalysisResult) -> Vector{Float64}
 
-Get q-values (FDR) from analysis results.
+Get BFDR (Bayesian FDR) values from analysis results.
+"""
+function getBFDR(ar::NetworkAnalysisResult)
+    return ar.results.BFDR
+end
+
+"""
+    getQValues(ar::NetworkAnalysisResult)
+
+Deprecated: use `getBFDR` instead.
 """
 function getQValues(ar::NetworkAnalysisResult)
-    return ar.results.q_value
+    @warn "getQValues is deprecated, use getBFDR instead" maxlog=1
+    return getBFDR(ar)
 end
 
 """
@@ -117,7 +127,7 @@ Requires: `using Graphs, SimpleWeightedGraphs, GraphPlot, Compose`
 - `ar::AbstractAnalysisResult`: Analysis results wrapper (AnalysisResult or NetworkAnalysisResult)
 - `posterior_threshold::Float64=0.5`: Minimum posterior probability for inclusion
 - `bf_threshold::Union{Float64, Nothing}=nothing`: Minimum Bayes factor for inclusion
-- `q_threshold::Float64=0.05`: Maximum q-value (FDR) for inclusion
+- `bfdr_threshold::Float64=0.05`: Maximum BFDR (Bayesian FDR) for inclusion
 - `log2fc_threshold::Union{Float64, Nothing}=nothing`: Minimum log2 fold change for inclusion
 - `include_bait::Bool=true`: Whether to include bait protein as a node
 - `weight_by::Symbol=:posterior_prob`: Edge weight source (:posterior_prob, :bayes_factor, :log2fc)
@@ -133,7 +143,7 @@ using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
 # With full analysis result
 ar = AnalysisResult(...)
 ar.bait_protein = "MYC"
-net = build_network(ar, posterior_threshold=0.8, q_threshold=0.01)
+net = build_network(ar, posterior_threshold=0.8, bfdr_threshold=0.01)
 
 # Or with lightweight wrapper
 ar = NetworkAnalysisResult(my_df, bait_protein="MYC")
@@ -295,7 +305,7 @@ Configuration for the complete network analysis pipeline (`run_network_analysis`
 # Network Construction Thresholds
 - `posterior_threshold::Float64=0.5`: Minimum posterior probability for inclusion
 - `bf_threshold::Union{Float64, Nothing}=nothing`: Minimum Bayes factor (nothing = no filter)
-- `q_threshold::Float64=0.05`: Maximum q-value (FDR) for inclusion
+- `bfdr_threshold::Float64=0.05`: Maximum BFDR (Bayesian FDR) for inclusion
 - `log2fc_threshold::Union{Float64, Nothing}=nothing`: Minimum |log2FC| (nothing = no filter)
 - `include_bait::Bool=true`: Whether to include bait protein as a node
 - `weight_by::Symbol=:posterior_prob`: Edge weight source (`:posterior_prob`, `:bayes_factor`, `:log2fc`)
@@ -342,7 +352,7 @@ config = NetworkConfig(
     bait_protein = "HAP40",
     bait_index = 1,
     posterior_threshold = 0.8,
-    q_threshold = 0.001,
+    bfdr_threshold = 0.001,
     bf_threshold = 3.0,
     enrich = true,
     min_string_score = 300,
@@ -361,7 +371,7 @@ Base.@kwdef mutable struct NetworkConfig
     # ---- Network construction thresholds ----
     posterior_threshold::Float64               = 0.5
     bf_threshold::Union{Float64, Nothing}     = nothing
-    q_threshold::Float64                      = 0.05
+    bfdr_threshold::Float64                   = 0.05
     log2fc_threshold::Union{Float64, Nothing} = nothing
     include_bait::Bool                        = true
     weight_by::Symbol                         = :posterior_prob
@@ -482,7 +492,7 @@ using Graphs, SimpleWeightedGraphs, GraphPlot, Compose
 
 result = run_network_analysis(ar, NetworkConfig(
     posterior_threshold = 0.8,
-    q_threshold = 0.01,
+    bfdr_threshold = 0.01,
     enrich = true,
     output_dir = "my_network",
     report_title = "My Network Report"

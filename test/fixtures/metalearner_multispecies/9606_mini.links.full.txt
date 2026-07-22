@@ -1,0 +1,3 @@
+protein1 protein2 neighborhood neighborhood_transferred fusion cooccurence homology coexpression coexpression_transferred experiments experiments_transferred database database_transferred textmining textmining_transferred combined_score
+9606.ENSP00000A1 9606.ENSP00000A2 0 150 0 0 0 90 0 0 200 0 300 50 400 700
+9606.ENSP00000A2 9606.ENSP00000A1 0 150 0 0 0 90 0 0 200 0 300 50 400 700

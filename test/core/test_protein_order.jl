@@ -30,7 +30,8 @@ Bayes factors. A bug here would silently associate BFs with the wrong proteins.
         Dict(1 => proto), Dict(1 => proto),
         1, no_experiments_dict,
         no_parameters_HBM, no_parameters_Regression,
-        experiment_positions, protocol_positions, matched_positions
+        experiment_positions, protocol_positions, matched_positions,
+        trues(length(protein_ids))
     )
 
     # --- Mock df: scrambled order, 2 proteins removed (ID_03, ID_06) ---
@@ -152,7 +153,8 @@ end
         Dict(1 => sample_proto), Dict(1 => control_proto),
         1, no_experiments_dict,
         no_parameters_HBM, no_parameters_Regression,
-        experiment_positions, protocol_positions, matched_positions
+        experiment_positions, protocol_positions, matched_positions,
+        trues(length(protein_ids))
     )
 
     # Verify our data has distinct IDs vs names

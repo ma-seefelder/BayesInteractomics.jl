@@ -14,13 +14,23 @@ These are generated automatically by `run_analysis` and saved to the paths speci
 
 ### Volcano Plot
 
-Shows posterior probability vs. mean log₂ fold-change for all proteins:
+The volcano plot shows `-log10(PEP)` (Posterior Error Probability, `PEP = 1 - posterior_prob`) on the y-axis vs. mean log₂ fold-change on the x-axis for all proteins. Significance bands are coloured by PEP threshold:
+
+| Band | PEP range | Colour |
+|---|---|---|
+| Background | `> 0.05` | Grey |
+| `PEP <= 0.05` | `(0.01, 0.05]` | Amber |
+| `PEP <= 0.01` | `(0.001, 0.01]` | Dark blue |
+| `PEP <= 0.001` | `<= 0.001` | Red |
+
+Three corresponding threshold lines are drawn at PEP = 0.05, 0.01, 0.001 to provide a consistent decision-strength visual progression.
 
 ```julia
-plot_analysis(copula_df, "volcano.png")
+volcano_plot(final_df)                # returns a StatsPlots plot object
+plot_analysis(final_df, "volcano.png")  # writes plot to file
 ```
 
-Highlights high-confidence interactors with strong enrichment.
+Proteins with `posterior_prob = 1.0` (PEP = 0.0) are placed at the axis top with a distinct marker. Highlights high-confidence interactors with strong enrichment.
 
 ### Evidence Plot
 
@@ -95,7 +105,7 @@ Shows how the Bayes factor changes as a function of the log₂FC threshold, sepa
 
 ## Diagnostic Plots
 
-See the [Diagnostics and Model Validation](@ref) page for details. Summary:
+See the [Diagnostics](@ref) page for details. Summary:
 
 | Function | Purpose |
 |---|---|
@@ -105,13 +115,43 @@ See the [Diagnostics and Model Validation](@ref) page for details. Summary:
 | `scale_location_plot` | Detect heteroscedasticity |
 | `residual_distribution_plot` | Residual shape |
 | `calibration_plot` | Predicted vs. empirical probabilities |
-| `calibration_comparison_plot` | Compare calibration criteria |
 | `pit_histogram_plot` | Probability Integral Transform |
 | `nu_optimization_plot` | WAIC vs. Student-t ν |
 | `bb_ppc_summary_plot` | Beta-Bernoulli PPC summary |
-| `sensitivity_tornado_plot` | Prior impact ranking |
-| `sensitivity_heatmap` | Posterior across prior settings |
-| `sensitivity_rank_correlation` | Ranking stability |
+| `bma_weights_plot` | LOO stacking weights for Copula and 3c-EM sub-models |
+| `kl_divergence_plot` | KL divergence between H0 and H1 components |
+| `within_class_correlation_plot` | Within-component residual correlation (SVG) |
+| `agnostic_zone_plot` | Proteins in the Agnostic zone (BFs ≈ 1) |
+| `copula_bootstrap_plot` | Bootstrap CIs for mixture weights |
+| `discordant_protein_plot` | Conflicting evidence across BF types |
+| `component_assignment_plot` | Per-protein posterior assignment distribution |
+| `em_convergence_plot` | EM log-likelihood trajectory |
+
+## Sensitivity Plots (v1.1.3)
+
+Generated automatically when `run_sensitivity = true`. The full sensitivity sweep evaluates the BMA combined posterior across an Empirical-Bayes-centered Dirichlet grid (constant-strength simplex) and stores per-protein stability statistics in the results DataFrame.
+
+| Function | Purpose |
+|---|---|
+| `sensitivity_tornado_plot` | Per-protein boundary-crossing band (top-N most sensitive); P=0.5 decision boundary annotation; colour codes for boundary-crossers (v1.1.3) |
+| `sensitivity_heatmap` | Posterior probability heatmap across prior settings (v1.1.3) |
+| `sensitivity_rank_correlation` | Spearman rank-correlation heatmap across prior settings (v1.1.3) |
+
+Additional supporting visualizations created via the report or sensitivity submodule:
+
+- **Ternary prior plot** — visualizes the constant-strength Dirichlet simplex grid (`alpha_H0`, `alpha_Agnostic`, `alpha_H1`) used for the sensitivity sweep. Each grid point is rendered on the simplex, with the EB-estimated centre highlighted.
+- **Decision-boundary stability band plot** — per-protein whisker ranges over the prior grid; whiskers cross the P=0.5 decision boundary for fragile proteins.
+- **Posterior overlay violins** — overlaid posterior distributions for the top-N most sensitive proteins, one violin per prior grid point, useful for inspecting *how* a posterior shifts under different priors rather than just its range.
+
+See [`prior_sensitivity.md`](prior_sensitivity.md) for the underlying methodology.
+
+## Within-Class Correlation Plot (v1.1.4)
+
+```julia
+within_class_correlation_plot(combined_result, bf_triplet)
+```
+
+Per-component residual-correlation scatter plot for the 3c-EM mixture, with name-based protein alignment between the three evidence streams. Renders as SVG by default for crisp web embedding. High within-class correlation indicates that the conditional-independence assumption of the latent class model is violated for that component, suggesting the Copula sub-model may be more appropriate.
 
 ## Differential Analysis Plots
 
@@ -169,18 +209,18 @@ savefig(plt, "publication_figure.png")
 ### Pipeline Plots
 
 ```@docs
-plot_analysis
-plot_results
-evidence_plot
-rank_rank_plot
-volcano_plot
+BayesInteractomics.plot_analysis
+BayesInteractomics.plot_results
+BayesInteractomics.evidence_plot
+BayesInteractomics.rank_rank_plot
+BayesInteractomics.volcano_plot
 ```
 
 ### Per-Protein Plots
 
 ```@docs
-plot_inference_results
-plot_log2fc
-plot_regression
-plot_bayesrange
+BayesInteractomics.plot_inference_results
+BayesInteractomics.plot_log2fc
+BayesInteractomics.plot_regression
+BayesInteractomics.plot_bayesrange
 ```

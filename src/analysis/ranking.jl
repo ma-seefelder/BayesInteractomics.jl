@@ -107,17 +107,6 @@ function plot(data::Ranks, figure_size = (1600,1200))
     return plt
 end
 
-function convertRanksToPlotting(data::Ranks)
-    ranks = data.ranks
-    plotting_data = zeros(Float64, size(ranks, 1), size(ranks, 1))
-
-    for i in axes(plotting_data, 1)
-        plotting_data[i,:] = rankfrequency(ranks[i,:], size(ranks, 1))
-    end
-
-    return plotting_data 
-end
-
 function rankfrequency(ranks, maxrank)
     frequency = zeros(Int64, maxrank)
     [frequency[ranks[i]] += 1 for i in eachindex(ranks)]

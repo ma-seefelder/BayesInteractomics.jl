@@ -22,7 +22,8 @@ for protein detection rate differences between samples and controls.
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     # Count detections for first protein
@@ -53,7 +54,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     counts = count_detections(data, 1, 3, 2)
@@ -85,7 +87,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(2)
     )
 
     counts = count_detections(data, 1, 3, 2)
@@ -119,7 +122,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     bf, p, plt = betabernoulli(data, 1, 6, 9)  # n_control=6, n_sample=9
@@ -152,7 +156,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     bf, p, plt = betabernoulli(data, 1, 6, 9)  # n_control=6, n_sample=9
@@ -180,7 +185,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     # Call with n_sample < actual detections (creates negative failures)
@@ -208,7 +214,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     # Note: n_sample and n_control must match total counts
@@ -240,7 +247,8 @@ end
         Dict(1 => p_control),
         1, Dict(1 => 1),
         3, 2,
-        [2], [3], [1]
+        [2], [3], [1],
+        trues(1)
     )
 
     # Test with create_plot=true (explicit request for plot)
