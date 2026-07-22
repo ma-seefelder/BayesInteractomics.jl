@@ -36,7 +36,10 @@ jobs:
         # The metalearner tests spawn `julia --project=examples` subprocesses to
         # load a self-contained MLJ.Stack (needs EvoTrees / DecisionTree /
         # NearestNeighborModels, which live in examples/, not the test target).
-        run: julia --project=examples -e 'using Pkg; Pkg.instantiate()'
+        # resolve first so the examples env picks up the package's current deps
+        # (e.g. LazyArtifacts) before the extension precompiles in the subprocess.
+        run: julia --project=examples -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@v1
         env:
           JULIA_NUM_THREADS: '4'
+          GKSwstype: '100'   # off-screen GR/GKS rendering (CI runners have no display)

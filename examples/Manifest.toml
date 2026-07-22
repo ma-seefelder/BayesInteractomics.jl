@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.6"
 manifest_format = "2.0"
 project_hash = "91b9aac1cf836165c5a6c61dd30179120d8ded2f"
 
@@ -224,13 +224,13 @@ weakdeps = ["FastCholesky"]
     FastCholeskyExt = "FastCholesky"
 
 [[deps.BayesInteractomics]]
-deps = ["Base64", "BenchmarkTools", "CSV", "CodecZlib", "Colors", "Compose", "Copulas", "DataFrames", "Dates", "Distributions", "Downloads", "GraphPlot", "Graphs", "JLD2", "JSON3", "LaTeXStrings", "LinearAlgebra", "LogExpFunctions", "LoggingExtras", "MultivariateStats", "Optim", "ProgressMeter", "QuadGK", "Random", "RxInfer", "SHA", "SimpleWeightedGraphs", "SpecialFunctions", "Statistics", "StatsBase", "StatsPlots", "TestItemRunner", "ThreadsX", "XLSX"]
+deps = ["Base64", "BenchmarkTools", "CSV", "CodecZlib", "Colors", "Compose", "Copulas", "DataFrames", "Dates", "Distributions", "Downloads", "GraphPlot", "Graphs", "JLD2", "JSON3", "LaTeXStrings", "LazyArtifacts", "LinearAlgebra", "LogExpFunctions", "LoggingExtras", "MultivariateStats", "Optim", "ProgressMeter", "QuadGK", "Random", "RxInfer", "SHA", "SimpleWeightedGraphs", "SpecialFunctions", "Statistics", "StatsBase", "StatsPlots", "TestItemRunner", "ThreadsX", "XLSX"]
 path = ".."
 uuid = "07c96638-0f98-4a6b-9a09-78dfb944548d"
-version = "1.1.6"
+version = "1.2.1"
 
     [deps.BayesInteractomics.extensions]
-    BayesInteractomicsEmbeddingsExt = ["UMAP", "Clustering", "Distances"]
+    BayesInteractomicsEmbeddingsExt = ["UMAP", "Clustering", "Distances", "TSne"]
     BayesInteractomicsImputationExt = ["GLM"]
     BayesInteractomicsMetalearnerExt = ["Flux", "MLJ", "MLJScikitLearnInterface", "HDF5"]
     BayesInteractomicsNetworkExt = ["Graphs", "SimpleWeightedGraphs", "GraphPlot", "Compose", "Cairo"]
