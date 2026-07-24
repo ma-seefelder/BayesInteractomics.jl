@@ -69,3 +69,7 @@ test/graphify-out/
 /metalearners/*.jld2
 /metalearners/_human_only/
 /model-*.jld2
+
+# Docs environment Manifest — resolved fresh on CI so a yanked transitive JLL
+# (e.g. a superseded Qt6Base_jll build) never breaks the Documentation workflow.
+/docs/Manifest.toml
