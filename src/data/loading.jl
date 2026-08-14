@@ -233,9 +233,20 @@ end
 
 """
 function create_protocol(data, cols::Dict{I,Vector{I}}, no_experiments::I, protein_ids) where I<:Integer
+    n_proteins = nrow(data)
+    function _read_cols(c)
+        real = filter(!iszero, c)
+        n_pad = length(c) - length(real)
+        mat = isempty(real) ?
+            Matrix{Union{Missing,Float64}}(missing, n_proteins, 0) :
+            Matrix{Union{Missing,Float64}}(data[:, real])
+        n_pad > 0 ?
+            hcat(mat, Matrix{Union{Missing,Float64}}(missing, n_proteins, n_pad)) :
+            mat
+    end
     return Protocol{Float64,I}(
         no_experiments, protein_ids,
-        Dict([i => Matrix(data[:, cols[i]]) for i ∈ 1:no_experiments])
+        Dict([i => _read_cols(cols[i]) for i ∈ 1:no_experiments])
     )
 end
 
@@ -277,8 +288,8 @@ function impute_missing_values!(
     control_cols::Dict{I,Vector{I}}
 ) where I<:Integer
 
-    sample_cols_unwrapped = vcat([sample_cols[i] for i in 1:length(sample_cols)]...)
-    control_cols_unwrapped = vcat([control_cols[i] for i in 1:length(control_cols)]...)
+    sample_cols_unwrapped = filter(!iszero, vcat([sample_cols[i] for i in 1:length(sample_cols)]...))
+    control_cols_unwrapped = filter(!iszero, vcat([control_cols[i] for i in 1:length(control_cols)]...))
 
     global_mean_sample = custom_mean(Matrix(data[:, sample_cols_unwrapped]))
     global_mean_control = custom_mean(Matrix(data[:, control_cols_unwrapped]))

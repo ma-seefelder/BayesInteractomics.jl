@@ -14,16 +14,9 @@
 
 # ── Runtime helpers (called by macro-generated code) ─────────────────────────
 
-function _take_dummy(dummy::Vector{Int}, n::Int)
-    isempty(dummy) && throw(ArgumentError(
-        "dummy columns required for protocol padding; add dummy=[col,...] to @protocol"))
-    return [dummy[mod1(i, length(dummy))] for i in 1:n]
-end
-
 function _pad_protocol_dicts!(
     sd::Vector{Dict{Int,Vector{Int}}},
-    cd::Vector{Dict{Int,Vector{Int}}},
-    dummy::Vector{Int}
+    cd::Vector{Dict{Int,Vector{Int}}}
 )
     isempty(sd) && return (sd, cd)
     max_exp = maximum(
@@ -36,33 +29,31 @@ function _pad_protocol_dicts!(
         for d in dicts
             haskey(d, exp) && (w = max(w, length(d[exp])))
         end
-        return w > 0 ? w : length(dummy)
+        return max(w, 1)
     end
 
-    # Pre-compute target widths before any mutation
     s_widths = Dict(exp => _max_width(sd, exp) for exp in 1:max_exp)
     c_widths = Dict(exp => _max_width(cd, exp) for exp in 1:max_exp)
 
     for i in eachindex(sd), exp in 1:max_exp
-        # Fill missing experiments
         if !haskey(sd[i], exp)
-            sd[i][exp] = _take_dummy(dummy, s_widths[exp])
+            sd[i][exp] = zeros(Int, s_widths[exp])
         elseif length(sd[i][exp]) < s_widths[exp]
-            append!(sd[i][exp], _take_dummy(dummy, s_widths[exp] - length(sd[i][exp])))
+            append!(sd[i][exp], zeros(Int, s_widths[exp] - length(sd[i][exp])))
         end
         if !haskey(cd[i], exp)
-            cd[i][exp] = _take_dummy(dummy, c_widths[exp])
+            cd[i][exp] = zeros(Int, c_widths[exp])
         elseif length(cd[i][exp]) < c_widths[exp]
-            append!(cd[i][exp], _take_dummy(dummy, c_widths[exp] - length(cd[i][exp])))
+            append!(cd[i][exp], zeros(Int, c_widths[exp] - length(cd[i][exp])))
         end
     end
     return (sd, cd)
 end
 
-function _count_real_replicates(dicts::Vector{Dict{Int,Vector{Int}}}, dummy_set::Set{Int})
+function _count_real_replicates(dicts::Vector{Dict{Int,Vector{Int}}})
     n = 0
     for d in dicts, (_, cols) in d
-        n += count(c -> c ∉ dummy_set, cols)
+        n += count(!iszero, cols)
     end
     return n
 end
@@ -91,7 +82,6 @@ end
 struct _Proto
     file::Any
     exps::Vector{_Exp}
-    dummy::Any
 end
 
 struct _Cond
@@ -123,7 +113,7 @@ end
 
 function _parse_protocol(ex)
     args = _mc_args(ex)
-    file = dummy = block = s_kw = c_kw = nothing
+    file = block = s_kw = c_kw = nothing
 
     for a in args
         if a isa Expr && a.head === :block
@@ -132,8 +122,7 @@ function _parse_protocol(ex)
             k, v = a.args[1], a.args[2]
             k === :samples  && (s_kw = v; continue)
             k === :controls && (c_kw = v; continue)
-            k === :dummy    && (dummy = v; continue)
-            throw(ArgumentError("@protocol: unknown keyword :$k (expected: samples, controls, dummy)"))
+            throw(ArgumentError("@protocol: unknown keyword :$k (expected: samples, controls)"))
         else
             isnothing(file) ? (file = a) :
                 throw(ArgumentError("@protocol: unexpected argument: $a"))
@@ -150,9 +139,9 @@ function _parse_protocol(ex)
             push!(exps, _parse_experiment_args(_mc_args(st)))
         end
         isempty(exps) && throw(ArgumentError("@protocol: at least one @experiment required"))
-        return _Proto(file, exps, dummy)
+        return _Proto(file, exps)
     elseif !isnothing(s_kw) && !isnothing(c_kw)
-        return _Proto(file, [_Exp(s_kw, c_kw)], dummy)
+        return _Proto(file, [_Exp(s_kw, c_kw)])
     else
         throw(ArgumentError(
             "@protocol: provide (samples=..., controls=...) or begin @experiment ... end"))
@@ -231,7 +220,6 @@ function _gen_config_stmts(protos::Vector{_Proto}, kws::Vector{Pair{Symbol,Any}}
         elseif k === :bait_id;      bait_id = v
         elseif k === :imputed_data; imp_data = v
         elseif k === :raw_data;     raw_data = v
-        elseif k === :dummy;        global_dummy = v
         else   push!(config_kws, get(_KW_ALIAS, k, k) => v)
         end
     end
@@ -249,21 +237,14 @@ function _gen_config_stmts(protos::Vector{_Proto}, kws::Vector{Pair{Symbol,Any}}
     push!(stmts, :(_bi_scols = Dict{Int,Vector{Int}}[$(s_exprs...)]))
     push!(stmts, :(_bi_ccols = Dict{Int,Vector{Int}}[$(c_exprs...)]))
 
-    # Padding + replicate counting
-    has_dummy = !isnothing(global_dummy) || any(p -> !isnothing(p.dummy), protos)
-    if has_dummy
-        dummy_expr = !isnothing(global_dummy) ? global_dummy :
-            first(p.dummy for p in protos if !isnothing(p.dummy))
-        pad_ref = GlobalRef(_BI_MOD, :_pad_protocol_dicts!)
-        cnt_ref = GlobalRef(_BI_MOD, :_count_real_replicates)
-        push!(stmts, :(_bi_dummy = collect(Int, $(dummy_expr))))
-        push!(stmts, :($(pad_ref)(_bi_scols, _bi_ccols, _bi_dummy)))
-        push!(stmts, :(_bi_ns = $(cnt_ref)(_bi_scols, Set(_bi_dummy))))
-        push!(stmts, :(_bi_nc = $(cnt_ref)(_bi_ccols, Set(_bi_dummy))))
-    else
-        push!(stmts, :(_bi_ns = sum(sum(length(v) for v in values(d)) for d in _bi_scols)))
-        push!(stmts, :(_bi_nc = sum(sum(length(v) for v in values(d)) for d in _bi_ccols)))
+    # Auto-pad + replicate counting (0 = missing/padding column)
+    pad_ref = GlobalRef(_BI_MOD, :_pad_protocol_dicts!)
+    cnt_ref = GlobalRef(_BI_MOD, :_count_real_replicates)
+    if length(protos) > 1
+        push!(stmts, :($(pad_ref)(_bi_scols, _bi_ccols)))
     end
+    push!(stmts, :(_bi_ns = $(cnt_ref)(_bi_scols)))
+    push!(stmts, :(_bi_nc = $(cnt_ref)(_bi_ccols)))
 
     # Output
     OF = GlobalRef(_BI_MOD, :OutputFiles)
@@ -445,14 +426,14 @@ results, ar = @interactomics begin
 end
 ```
 
-## Multi-protocol meta-analysis with dummy padding
+## Multi-protocol meta-analysis (auto-padded)
 ```julia
 results, ar = @interactomics begin
-    @protocol "dataset.xlsx" dummy=[162,163,164,165] begin
+    @protocol "dataset.xlsx" begin
         @experiment samples=[2,3,4] controls=[14,15,16]
         @experiment samples=[5,6,7] controls=[17,18,19]
     end
-    @protocol "dataset.xlsx" dummy=[162,163,164,165] begin
+    @protocol "dataset.xlsx" begin
         @experiment samples=[29,30,31] controls=[26,27,28]
     end
     bait = "HTT"
@@ -460,6 +441,8 @@ results, ar = @interactomics begin
     output = "./results"
 end
 ```
+Protocols with fewer experiments are auto-padded with `missing`-filled
+columns (column index 0) to match the widest protocol.
 
 ## Differential analysis (2 conditions)
 ```julia

@@ -6,7 +6,7 @@
 #   • The same six-protocol HTT meta-analysis as meta_analysis_workflow.jl,
 #     rewritten with the @interactomics macro DSL
 #   • Column layouts via @protocol / @experiment — only real replicates listed,
-#     dummy columns and missing experiments auto-padded by the macro
+#     missing experiments and width differences auto-padded with missing values
 #   • n_samples / n_controls auto-computed (no manual count_samples helper)
 #   • CONFIG construction, run_analysis, and differential_analysis all driven
 #     by the macro — no boilerplate
@@ -41,8 +41,8 @@ const DIFF_DIR = joinpath(BASEPATH, "wtHTT_vs_mHTT")
 #
 # Six protocols from four studies (grecco ×4, gutierrez, sap).
 # Each protocol has up to 4 experiments.  Only real replicates are listed;
-# dummy=[162,163,164,165] is declared once per condition — the macro
-# auto-pads both missing experiments and within-experiment width differences.
+# the macro auto-pads missing experiments and width differences with
+# missing-valued columns so RxInfer sees a uniform experiment structure.
 # =========================================================================== #
 
 (; diff, result_A, result_B) = @interactomics begin
@@ -62,7 +62,7 @@ const DIFF_DIR = joinpath(BASEPATH, "wtHTT_vs_mHTT")
         @protocol FILE begin
             @experiment samples=[36,37,38,39] controls=[32,33,34,35]
         end
-        # Grecco 2 — 4 experiments (all real)
+        # Grecco 2 — 4 experiments
         @protocol FILE begin
             @experiment samples=[48,49,50,51] controls=[44,45,46,47]
             @experiment samples=[52,53,54,55] controls=[44,45,46,47]
@@ -84,7 +84,6 @@ const DIFF_DIR = joinpath(BASEPATH, "wtHTT_vs_mHTT")
             @experiment samples=[140,141,142] controls=[134,135,136]
         end
 
-        dummy = [162,163,164,165]
         bait    = "ENSP00000347184"
         bait_id = 237
         output  = OutputFiles(joinpath(BASEPATH, "wtHTT"), image_ext=".svg")
@@ -110,7 +109,7 @@ const DIFF_DIR = joinpath(BASEPATH, "wtHTT_vs_mHTT")
         @protocol FILE begin
             @experiment samples=[40,41,42,43] controls=[32,33,34,35]
         end
-        # Grecco 2 — 4 experiments (all real)
+        # Grecco 2 — 4 experiments
         @protocol FILE begin
             @experiment samples=[70,71,72]      controls=[44,45,46,47]
             @experiment samples=[73,74,75,76]   controls=[44,45,46,47]
@@ -132,7 +131,6 @@ const DIFF_DIR = joinpath(BASEPATH, "wtHTT_vs_mHTT")
             @experiment samples=[159,160,161]     controls=[134,135,136]
         end
 
-        dummy = [162,163,164,165]
         bait    = "ENSP00000347184"
         bait_id = 237
         output  = OutputFiles(joinpath(BASEPATH, "mHTT"), image_ext=".svg")
