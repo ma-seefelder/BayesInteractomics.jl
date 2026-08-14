@@ -39,9 +39,22 @@ function _pad_protocol_dicts!(
         return w > 0 ? w : length(dummy)
     end
 
+    # Pre-compute target widths before any mutation
+    s_widths = Dict(exp => _max_width(sd, exp) for exp in 1:max_exp)
+    c_widths = Dict(exp => _max_width(cd, exp) for exp in 1:max_exp)
+
     for i in eachindex(sd), exp in 1:max_exp
-        haskey(sd[i], exp) || (sd[i][exp] = _take_dummy(dummy, _max_width(sd, exp)))
-        haskey(cd[i], exp) || (cd[i][exp] = _take_dummy(dummy, _max_width(cd, exp)))
+        # Fill missing experiments
+        if !haskey(sd[i], exp)
+            sd[i][exp] = _take_dummy(dummy, s_widths[exp])
+        elseif length(sd[i][exp]) < s_widths[exp]
+            append!(sd[i][exp], _take_dummy(dummy, s_widths[exp] - length(sd[i][exp])))
+        end
+        if !haskey(cd[i], exp)
+            cd[i][exp] = _take_dummy(dummy, c_widths[exp])
+        elseif length(cd[i][exp]) < c_widths[exp]
+            append!(cd[i][exp], _take_dummy(dummy, c_widths[exp] - length(cd[i][exp])))
+        end
     end
     return (sd, cd)
 end
@@ -208,7 +221,7 @@ end
 function _gen_config_stmts(protos::Vector{_Proto}, kws::Vector{Pair{Symbol,Any}})
     output_expr = nothing
     image_ext = QuoteNode(".png")
-    bait = bait_id = imp_data = raw_data = nothing
+    bait = bait_id = imp_data = raw_data = global_dummy = nothing
     config_kws = Pair{Symbol,Any}[]
 
     for (k, v) in kws
@@ -218,6 +231,7 @@ function _gen_config_stmts(protos::Vector{_Proto}, kws::Vector{Pair{Symbol,Any}}
         elseif k === :bait_id;      bait_id = v
         elseif k === :imputed_data; imp_data = v
         elseif k === :raw_data;     raw_data = v
+        elseif k === :dummy;        global_dummy = v
         else   push!(config_kws, get(_KW_ALIAS, k, k) => v)
         end
     end
@@ -236,9 +250,10 @@ function _gen_config_stmts(protos::Vector{_Proto}, kws::Vector{Pair{Symbol,Any}}
     push!(stmts, :(_bi_ccols = Dict{Int,Vector{Int}}[$(c_exprs...)]))
 
     # Padding + replicate counting
-    has_dummy = any(p -> !isnothing(p.dummy), protos)
+    has_dummy = !isnothing(global_dummy) || any(p -> !isnothing(p.dummy), protos)
     if has_dummy
-        dummy_expr = first(p.dummy for p in protos if !isnothing(p.dummy))
+        dummy_expr = !isnothing(global_dummy) ? global_dummy :
+            first(p.dummy for p in protos if !isnothing(p.dummy))
         pad_ref = GlobalRef(_BI_MOD, :_pad_protocol_dicts!)
         cnt_ref = GlobalRef(_BI_MOD, :_count_real_replicates)
         push!(stmts, :(_bi_dummy = collect(Int, $(dummy_expr))))
