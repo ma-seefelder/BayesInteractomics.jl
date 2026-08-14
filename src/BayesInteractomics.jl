@@ -555,7 +555,11 @@ public getDifferentialQValues, getDifferentialBFDR, getClassifications, getDelta
 # Julia 1.12 disallows the same symbol appearing in both `public` and `export`.
 public condition_labels, getAnalyses
 
+# Macro DSL (@interactomics, @protocol)
+include("macro.jl")
+
 # Exports
+export @interactomics, @protocol
 export load_data, run_analysis, BayesResult, getProteinData, CONFIG, OutputFiles
 export check_bait_detected
 # Normalisation pipeline
