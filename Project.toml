@@ -62,7 +62,7 @@ BayesInteractomicsNetworkExt = ["Graphs", "SimpleWeightedGraphs", "GraphPlot", "
 [compat]
 Aqua = "0.8, 0.9"
 BenchmarkTools = "1.6.3"
-CSV = "0.10"
+CSV = "0.10, 1"
 Cairo = "1"
 Clustering = "0.15"
 CodecZlib = "0.7.8"
